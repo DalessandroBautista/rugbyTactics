@@ -5,12 +5,14 @@ import { Sidebar } from './Sidebar'
 import { FieldCanvas } from './FieldCanvas'
 import { PlayLibrary } from './PlayLibrary'
 import { ExportDialog } from './ExportDialog'
+import { FormationDialog } from './FormationDialog'
 import { useStore } from '../store/useStore'
 
 export const Layout: React.FC = () => {
   const plays = useStore(s => s.plays)
   const currentPlayId = useStore(s => s.currentPlayId)
   const isRecording = useStore(s => s.isRecording)
+  const showFormation = useStore(s => s.showFormation)
 
   const play = plays.find(p => p.id === currentPlayId)
 
@@ -71,6 +73,12 @@ export const Layout: React.FC = () => {
 
       <PlayLibrary />
       <ExportDialog />
+      {showFormation && (
+        <FormationDialog
+          type={showFormation}
+          onClose={() => useStore.getState().setShowFormation(null)}
+        />
+      )}
     </div>
   )
 }

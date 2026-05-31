@@ -69,12 +69,15 @@ interface PlayStore {
   playbackSpeed: PlaybackSpeed
   view: ViewState
   selectedPlayerId: number | null
+  selectedPlayerIds: number[]
   selectedBall: boolean
   recordedMovements: RecordedMovement[]
   recordingStartTime: number | null
   showExportDialog: boolean
   showLibrary: boolean
+  showFormation: 'lineout' | 'scrum' | null
   isDirty: boolean
+  multiSelect: boolean
 
   getCurrentPlay: () => Play | null
   setCurrentPlay: (id: string) => void
@@ -83,10 +86,12 @@ interface PlayStore {
   duplicatePlay: (id: string) => void
   deletePlay: (id: string) => void
   resetPlay: (id: string) => void
+  resetMovements: (id: string) => void
   updatePlay: (id: string, updates: Partial<Play>) => void
 
   setEditMode: (mode: EditMode) => void
   setSelectedPlayer: (id: number | null) => void
+  toggleSelectedPlayer: (id: number) => void
   setSelectedBall: (selected: boolean) => void
 
   movePlayer: (id: number, x: number, y: number) => void
@@ -114,6 +119,8 @@ interface PlayStore {
 
   toggleExportDialog: () => void
   toggleLibrary: () => void
+  setShowFormation: (type: 'lineout' | 'scrum' | null) => void
+  toggleMultiSelect: () => void
 
   loadFromJson: (json: string) => void
   exportToJson: () => string | null
@@ -135,12 +142,15 @@ export const useStore = create<PlayStore>((set, get) => {
     playbackSpeed: 1,
     view: { zoom: 1, panX: 0, panY: 0 },
     selectedPlayerId: null,
+    selectedPlayerIds: [],
     selectedBall: false,
     recordedMovements: [],
     recordingStartTime: null,
     showExportDialog: false,
     showLibrary: false,
+    showFormation: null,
     isDirty: false,
+    multiSelect: false,
 
     getCurrentPlay: () => {
       const state = get()
@@ -148,7 +158,7 @@ export const useStore = create<PlayStore>((set, get) => {
     },
 
     setCurrentPlay: (id) => {
-      set({ currentPlayId: id, currentTime: 0, isPlaying: false, selectedPlayerId: null, selectedBall: false })
+      set({ currentPlayId: id, currentTime: 0, isPlaying: false, selectedPlayerId: null, selectedPlayerIds: [], selectedBall: false })
       saveCurrentPlayId(id)
     },
 
@@ -206,9 +216,27 @@ export const useStore = create<PlayStore>((set, get) => {
       savePlays(newPlays)
     },
 
+    resetMovements: (id) => {
+      const state = get()
+      const newPlays = state.plays.map(p => {
+        if (p.id !== id) return p
+        const players = p.players.map(pl => ({ ...pl, trajectory: [] }))
+        const ball = { ...p.ball, trajectory: [] }
+        return { ...p, players, ball }
+      })
+      set({ plays: newPlays, isDirty: true, currentTime: 0, isPlaying: false })
+      savePlays(newPlays)
+    },
+
     setEditMode: (mode) => set({ editMode: mode }),
-    setSelectedPlayer: (id) => set({ selectedPlayerId: id, selectedBall: false }),
-    setSelectedBall: (selected) => set({ selectedBall: selected, selectedPlayerId: null }),
+    setSelectedPlayer: (id) => set({ selectedPlayerId: id, selectedPlayerIds: id !== null ? [id] : [], selectedBall: false }),
+    toggleSelectedPlayer: (id) => set(state => {
+      const ids = state.selectedPlayerIds.includes(id)
+        ? state.selectedPlayerIds.filter(i => i !== id)
+        : [...state.selectedPlayerIds, id]
+      return { selectedPlayerIds: ids, selectedPlayerId: id, selectedBall: false }
+    }),
+    setSelectedBall: (selected) => set({ selectedBall: selected, selectedPlayerId: null, selectedPlayerIds: [] }),
 
     movePlayer: (id, x, y) => {
       const state = get()
@@ -428,11 +456,13 @@ export const useStore = create<PlayStore>((set, get) => {
       set({ plays: newPlays })
     },
 
-    setZoom: (zoom) => set(state => ({ view: { ...state.view, zoom: Math.max(0.1, Math.min(5, zoom)) } })),
+    setZoom: (zoom) => set(state => ({ view: { ...state.view, zoom: Math.max(0.3, Math.min(2, zoom)) } })),
     setPan: (x, y) => set(state => ({ view: { ...state.view, panX: x, panY: y } })),
 
     toggleExportDialog: () => set(state => ({ showExportDialog: !state.showExportDialog })),
     toggleLibrary: () => set(state => ({ showLibrary: !state.showLibrary })),
+    setShowFormation: (type) => set({ showFormation: type }),
+    toggleMultiSelect: () => set(state => ({ multiSelect: !state.multiSelect })),
 
     loadFromJson: (json) => {
       try {

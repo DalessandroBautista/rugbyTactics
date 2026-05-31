@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useStore } from '../store/useStore'
 import { EditMode } from '../types'
+import { APP_VERSION } from '../version'
 
 export const TopBar: React.FC = () => {
   const editMode = useStore(s => s.editMode)
@@ -15,6 +16,8 @@ export const TopBar: React.FC = () => {
   const toggleLibrary = useStore(s => s.toggleLibrary)
   const showLibrary = useStore(s => s.showLibrary)
   const toggleExportDialog = useStore(s => s.toggleExportDialog)
+  const multiSelect = useStore(s => s.multiSelect)
+  const toggleMultiSelect = useStore(s => s.toggleMultiSelect)
 
   const handleModeChange = (mode: EditMode) => {
     if (isRecording) finishRecording()
@@ -40,8 +43,9 @@ export const TopBar: React.FC = () => {
       minHeight: '44px',
       flexWrap: 'wrap',
     }}>
-      <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '16px', marginRight: '16px', fontFamily: 'sans-serif' }}>
-        TacticsRugby
+      <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '16px', marginRight: '16px', fontFamily: 'sans-serif', display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+        <span>TacticsRugby</span>
+        <span style={{ fontSize: '11px', color: '#888', fontWeight: 'normal' }}>v{APP_VERSION}</span>
       </div>
 
       <div style={{ display: 'flex', gap: '4px', background: '#2a2a3e', borderRadius: '8px', padding: '3px' }}>
@@ -96,7 +100,32 @@ export const TopBar: React.FC = () => {
         🔄 Reset
       </button>
 
+      <button
+        onClick={() => { if (currentPlayId) useStore.getState().resetMovements(currentPlayId) }}
+        style={iconButtonStyle}
+      >
+        🧹 Borrar movimientos
+      </button>
+
+      <button onClick={() => useStore.getState().setShowFormation('lineout')} style={iconButtonStyle}>
+        📏 Lineout
+      </button>
+      <button onClick={() => useStore.getState().setShowFormation('scrum')} style={iconButtonStyle}>
+        💪 Scrum
+      </button>
+
       <div style={{ flex: 1 }} />
+
+      <button
+        onClick={toggleMultiSelect}
+        style={{
+          ...iconButtonStyle,
+          background: multiSelect ? '#3498db' : '#2a2a3e',
+          color: multiSelect ? '#fff' : '#ccc',
+        }}
+      >
+        {multiSelect ? '☑ Multi' : '☐ Multi'}
+      </button>
 
       <button onClick={toggleLibrary} style={iconButtonStyle}>
         📚 {showLibrary ? 'Close' : 'Library'}

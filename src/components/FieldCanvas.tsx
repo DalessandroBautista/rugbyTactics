@@ -11,10 +11,19 @@ const FIELD_COLOR = '#3d8c3d'
 const LINE_COLOR = '#ffffff'
 const LINE_WIDTH = 2
 
+function screenToField(sx: number, sy: number, panX: number, panY: number, zoom: number): { lx: number; ly: number } {
+  const layerX = (sx - panX) / zoom
+  const layerY = (sy - panY) / zoom
+  const gx = FIELD_PX.width / 2
+  const gy = FIELD_PX.totalLength / 2
+  const lx = gy - layerY
+  const ly = layerX - gx
+  return { lx, ly }
+}
+
 export const FieldCanvas: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
-  const centeredRef = useRef(false)
 
   const plays = useStore(s => s.plays)
   const currentPlayId = useStore(s => s.currentPlayId)
@@ -22,96 +31,228 @@ export const FieldCanvas: React.FC = () => {
   const isRecording = useStore(s => s.isRecording)
   const recordedMovements = useStore(s => s.recordedMovements)
   const selectedPlayerId = useStore(s => s.selectedPlayerId)
+  const selectedPlayerIds = useStore(s => s.selectedPlayerIds)
+  const multiSelect = useStore(s => s.multiSelect)
   const selectedBall = useStore(s => s.selectedBall)
   const view = useStore(s => s.view)
   const setZoom = useStore(s => s.setZoom)
   const setPan = useStore(s => s.setPan)
-  const movePlayer = useStore(s => s.movePlayer)
-  const moveBall = useStore(s => s.moveBall)
-  const setBallCarrier = useStore(s => s.setBallCarrier)
   const setEditMode = useStore(s => s.setEditMode)
   const setSelectedPlayer = useStore(s => s.setSelectedPlayer)
+  const toggleSelectedPlayer = useStore(s => s.toggleSelectedPlayer)
   const startRecording = useStore(s => s.startRecording)
   const finishRecording = useStore(s => s.finishRecording)
 
   useAnimation()
   const { handleDrag, resetLastPoint } = useRecording()
+  const dragContext = useRef<{
+    draggedId: number
+    startX: number
+    startY: number
+    initialPositions: Record<number, { x: number; y: number }>
+  } | null>(null)
+  const isPanning = useRef(false)
+  const lastPan = useRef({ x: 0, y: 0 })
+  const minZoomRef = useRef(0.3)
+  const clickedPlayerRef = useRef(false)
 
   const play = plays.find(p => p.id === currentPlayId)
 
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
-
     const measure = () => {
       const rect = el.getBoundingClientRect()
       if (rect.width > 0 && rect.height > 0) {
         setSize({ w: rect.width, h: rect.height })
       }
     }
-
     measure()
     window.addEventListener('resize', measure)
     return () => window.removeEventListener('resize', measure)
   }, [])
 
   useEffect(() => {
-    if (size.w > 0 && size.h > 0 && !centeredRef.current) {
-      centeredRef.current = true
+    if (size.w > 0 && size.h > 0) {
       const visW = FIELD_PX.totalLength
       const visH = FIELD_PX.width
-      const z = Math.min((size.w - 40) / visW, (size.h - 40) / visH, 1.5)
-      const cx = FIELD_PX.width / 2
-      const cy = FIELD_PX.totalLength / 2
+      const z = Math.min((size.w - 20) / visW, (size.h - 20) / visH)
+      minZoomRef.current = z
+      const cx = FIELD_PX.width / 2 + FIELD_PX.totalLength / 2
+      const cy = FIELD_PX.totalLength / 2 - FIELD_PX.width / 2
       setPan(size.w / 2 - cx * z, size.h / 2 - cy * z)
       setZoom(z)
     }
-  }, [size])
+  }, [size.w, size.h])
 
-  const [isPanning, setIsPanning] = useState(false)
-  const lastPan = useRef({ x: 0, y: 0 })
+  // Native wheel zoom on the container div (more reliable than Konva onWheel)
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
 
-  const handleMouseDown = useCallback((e: any) => {
-    if (e.target === e.target.getStage()) {
-      setIsPanning(true)
-      const p = e.target.getStage().getPointerPosition()
-      lastPan.current = { x: p.x, y: p.y }
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const rect = container.getBoundingClientRect()
+      const mx = e.clientX - rect.left
+      const my = e.clientY - rect.top
+
+      const state = useStore.getState()
+      const oldZ = state.view.zoom
+      const factor = 1.08
+      const newZ = Math.max(minZoomRef.current, Math.min(5, e.deltaY > 0 ? oldZ / factor : oldZ * factor))
+
+      // Zoom toward pointer
+      state.setPan(mx - (mx - state.view.panX) * (newZ / oldZ), my - (my - state.view.panY) * (newZ / oldZ))
+      state.setZoom(newZ)
     }
+
+    container.addEventListener('wheel', onWheel, { passive: false })
+    return () => container.removeEventListener('wheel', onWheel)
   }, [])
 
-  const handleMouseMove = useCallback((e: any) => {
-    if (!isPanning) return
-    const p = e.target.getStage().getPointerPosition()
+  // Native click detection using DOM events (bypasses Konva event issues)
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const onClick = (e: MouseEvent) => {
+      const rect = container.getBoundingClientRect()
+      const mx = e.clientX - rect.left
+      const my = e.clientY - rect.top
+
+      const state = useStore.getState()
+      const play = state.plays.find(pl => pl.id === state.currentPlayId)
+      if (!play) return
+
+      // Convert screen coordinates to field coordinates
+      const fieldPos = screenToField(mx, my, state.view.panX, state.view.panY, state.view.zoom)
+
+      // Check if clicked on a player (within 25px radius)
+      const clickedPlayer = play.players.find(player => {
+        const dx = player.x - fieldPos.lx
+        const dy = player.y - fieldPos.ly
+        const distance = Math.sqrt(dx * dx + dy * dy)
+        return distance < 25
+      })
+
+      // Check if clicked on ball (within 15px radius)
+      const clickedBall = (() => {
+        const dx = play.ball.x - fieldPos.lx
+        const dy = play.ball.y - fieldPos.ly
+        return Math.sqrt(dx * dx + dy * dy) < 15
+      })()
+
+      if (clickedPlayer) {
+        // Player clicked
+        if (state.multiSelect) {
+          state.toggleSelectedPlayer(clickedPlayer.id)
+        } else {
+          state.setSelectedPlayer(clickedPlayer.id)
+        }
+        state.setSelectedBall(false)
+        return
+      }
+
+      if (clickedBall) {
+        // Ball clicked
+        state.setSelectedPlayer(null)
+        state.setSelectedBall(true)
+        return
+      }
+
+      // Empty space clicked - deselect all
+      state.setSelectedPlayer(null)
+      state.setSelectedBall(false)
+    }
+
+    container.addEventListener('click', onClick)
+    return () => container.removeEventListener('click', onClick)
+  }, [])
+
+  // Selection via Stage onMouseDown using coordinate detection
+  const handleStageMouseDown = useCallback((e: any) => {
+    const stg = e.target.getStage()
+    if (!stg) return
+    const p = stg.getPointerPosition()
+    if (!p) return
+
+    const state = useStore.getState()
+    const play = state.plays.find(pl => pl.id === state.currentPlayId)
+    if (!play) return
+
+    // Convert screen coordinates to field coordinates
+    const fieldPos = screenToField(p.x, p.y, state.view.panX, state.view.panY, state.view.zoom)
+
+    // Check if clicked on a player (within 25px radius)
+    const clickedPlayer = play.players.find(player => {
+      const dx = player.x - fieldPos.lx
+      const dy = player.y - fieldPos.ly
+      const distance = Math.sqrt(dx * dx + dy * dy)
+      return distance < 25
+    })
+
+    // Check if clicked on ball (within 15px radius)
+    const clickedBall = (() => {
+      const dx = play.ball.x - fieldPos.lx
+      const dy = play.ball.y - fieldPos.ly
+      return Math.sqrt(dx * dx + dy * dy) < 15
+    })()
+
+    if (clickedPlayer) {
+      // Player clicked
+      if (state.multiSelect) {
+        state.toggleSelectedPlayer(clickedPlayer.id)
+      } else {
+        state.setSelectedPlayer(clickedPlayer.id)
+      }
+      state.setSelectedBall(false)
+      return
+    }
+
+    if (clickedBall) {
+      // Ball clicked
+      state.setSelectedPlayer(null)
+      state.setSelectedBall(true)
+      return
+    }
+
+    // Empty space clicked - deselect all and start panning
+    state.setSelectedPlayer(null)
+    state.setSelectedBall(false)
+    isPanning.current = true
+    lastPan.current = { x: p.x, y: p.y }
+  }, [])
+
+  const handleStageMouseMove = useCallback((e: any) => {
+    if (!isPanning.current) return
+    const p = e.target.getStage()?.getPointerPosition()
     if (!p) return
     const state = useStore.getState()
     state.setPan(state.view.panX + p.x - lastPan.current.x, state.view.panY + p.y - lastPan.current.y)
     lastPan.current = { x: p.x, y: p.y }
-  }, [isPanning])
-
-  const handleMouseUp = useCallback(() => setIsPanning(false), [])
-
-  const handleWheel = useCallback((e: any) => {
-    e.evt.preventDefault()
-    const stg = e.target.getStage()
-    if (!stg) return
-    const oldZ = useStore.getState().view.zoom
-    const factor = 1.08
-    const newZ = Math.max(0.05, Math.min(5, e.evt.deltaY > 0 ? oldZ / factor : oldZ * factor))
-    const p = stg.getPointerPosition()
-    const pan = useStore.getState().view
-    const mx = p.x - pan.panX
-    const my = p.y - pan.panY
-    useStore.getState().setPan(p.x - mx * (newZ / oldZ), p.y - my * (newZ / oldZ))
-    useStore.getState().setZoom(newZ)
   }, [])
 
-  const handleStageClick = useCallback((e: any) => {
-    if (e.target === e.target.getStage()) {
-      useStore.getState().setSelectedPlayer(null)
-      useStore.getState().setSelectedBall(false)
-      useStore.getState().setEditMode('select')
+  const handleStageMouseUp = useCallback(() => { isPanning.current = false }, [])
+
+  const handleStageTap = useCallback((e: any) => {
+    const state = useStore.getState()
+    state.setSelectedPlayer(null)
+    state.setSelectedBall(false)
+  }, [])
+
+  const handlePlayerDragStart = useCallback((id: number, x: number, y: number) => {
+    if (editMode === 'move') {
+      const state = useStore.getState()
+      const play = state.plays.find(p => p.id === state.currentPlayId)
+      if (!play) return
+      const initialPositions: Record<number, { x: number; y: number }> = {}
+      for (const pid of state.selectedPlayerIds) {
+        const p = play.players.find(pl => pl.id === pid)
+        if (p) initialPositions[pid] = { x: p.x, y: p.y }
+      }
+      dragContext.current = { draggedId: id, startX: x, startY: y, initialPositions }
     }
-  }, [])
+  }, [editMode])
 
   const handlePlayerDragMove = useCallback((id: number, x: number, y: number) => {
     const state = useStore.getState()
@@ -122,6 +263,26 @@ export const FieldCanvas: React.FC = () => {
       }
       const freshState = useStore.getState()
       if (freshState.isRecording) handleDrag(id, x, y)
+    } else if (state.editMode === 'move') {
+      const ctx = dragContext.current
+      if (!ctx || ctx.draggedId !== id) return
+      const dx = x - ctx.startX
+      const dy = y - ctx.startY
+      if (dx === 0 && dy === 0) return
+      const play = state.plays.find(p => p.id === state.currentPlayId)
+      if (!play) return
+      const selectedSet = new Set(state.selectedPlayerIds)
+      const newPlayers = play.players.map(p => {
+        if (p.id !== id && selectedSet.has(p.id)) {
+          const init = ctx.initialPositions[p.id]
+          if (init) return { ...p, x: init.x + dx, y: init.y + dy }
+        }
+        return p
+      })
+      const newPlays = state.plays.map(p =>
+        p.id === state.currentPlayId ? { ...p, players: newPlayers } : p
+      )
+      useStore.setState({ plays: newPlays, isDirty: true })
     }
   }, [handleDrag])
 
@@ -137,6 +298,7 @@ export const FieldCanvas: React.FC = () => {
       handleDrag(id, x, y)
       state.finishRecording()
     }
+    dragContext.current = null
     resetLastPoint()
   }, [handleDrag, resetLastPoint])
 
@@ -175,13 +337,11 @@ export const FieldCanvas: React.FC = () => {
       <Stage
         width={size.w}
         height={size.h}
-        onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onClick={handleStageClick}
-        onTap={handleStageClick}
+        onMouseDown={handleStageMouseDown}
+        onMouseMove={handleStageMouseMove}
+        onMouseUp={handleStageMouseUp}
+        onMouseLeave={handleStageMouseUp}
+        onTap={handleStageTap}
       >
         <Layer x={view.panX} y={view.panY} scaleX={view.zoom} scaleY={view.zoom}>
           <Group
@@ -212,13 +372,13 @@ export const FieldCanvas: React.FC = () => {
           ))}
 
           {[
-            { text: 'Línea de marca', y: IGL, align: 'left' },
-            { text: '5m', y: IGL + 5 * SCALE, align: 'left' },
-            { text: '10m', y: IGL + 10 * SCALE, align: 'left' },
-            { text: 'Mediocampo', y: H / 2, align: 'center' },
-            { text: '10m', y: H - IGL - 10 * SCALE, align: 'left' },
-            { text: '5m', y: H - IGL - 5 * SCALE, align: 'left' },
-            { text: 'Línea de marca', y: H - IGL, align: 'left' },
+            { text: 'Línea de marca', y: IGL },
+            { text: '5m', y: IGL + 5 * SCALE },
+            { text: '10m', y: IGL + 10 * SCALE },
+            { text: 'Mediocampo', y: H / 2 },
+            { text: '10m', y: H - IGL - 10 * SCALE },
+            { text: '5m', y: H - IGL - 5 * SCALE },
+            { text: 'Línea de marca', y: H - IGL },
           ].map((label, i) => (
             <Text
               key={`label-h-${i}`}
@@ -304,18 +464,17 @@ export const FieldCanvas: React.FC = () => {
               x={player.x}
               y={player.y}
               draggable={editMode === 'move' || editMode === 'record'}
-              onClick={() => { useStore.getState().setSelectedPlayer(player.id); useStore.getState().setSelectedBall(false) }}
-              onTap={() => { useStore.getState().setSelectedPlayer(player.id); useStore.getState().setSelectedBall(false) }}
+              onDragStart={(e) => handlePlayerDragStart(player.id, e.target.x(), e.target.y())}
               onDragMove={(e) => handlePlayerDragMove(player.id, e.target.x(), e.target.y())}
               onDragEnd={(e) => handlePlayerDragEnd(player.id, e.target.x(), e.target.y())}
             >
               <Circle
                 radius={9}
                 fill={player.color}
-                stroke={selectedPlayerId === player.id ? '#fff' : 'rgba(0,0,0,0.2)'}
-                strokeWidth={selectedPlayerId === player.id ? 2 : 1}
+                stroke={selectedPlayerIds.includes(player.id) ? '#fff' : 'rgba(0,0,0,0.2)'}
+                strokeWidth={selectedPlayerIds.includes(player.id) ? 2 : 1}
                 shadowColor="rgba(0,0,0,0.3)"
-                shadowBlur={3}
+                shadowBlur={selectedPlayerIds.includes(player.id) ? 5 : 3}
                 shadowOffsetY={1}
               />
               <Text
@@ -338,8 +497,6 @@ export const FieldCanvas: React.FC = () => {
             x={play.ball.x}
             y={play.ball.y}
             draggable={editMode === 'move' || editMode === 'record'}
-            onClick={() => { useStore.getState().setSelectedPlayer(null); useStore.getState().setSelectedBall(true) }}
-            onTap={() => { useStore.getState().setSelectedPlayer(null); useStore.getState().setSelectedBall(true) }}
             onDragMove={(e) => handleBallDragMove(e.target.x(), e.target.y())}
             onDragEnd={(e) => handleBallDragEnd(e.target.x(), e.target.y())}
           >
