@@ -110,12 +110,12 @@ export const FieldCanvas: React.FC = () => {
     return () => container.removeEventListener('wheel', onWheel)
   }, [])
 
-  // Native click detection using DOM events (bypasses Konva event issues)
+  // Native mousedown for selection (fires before Konva processes events)
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
-    const onClick = (e: MouseEvent) => {
+    const onMouseDown = (e: MouseEvent) => {
       const rect = container.getBoundingClientRect()
       const mx = e.clientX - rect.left
       const my = e.clientY - rect.top
@@ -124,26 +124,16 @@ export const FieldCanvas: React.FC = () => {
       const play = state.plays.find(pl => pl.id === state.currentPlayId)
       if (!play) return
 
-      // Convert screen coordinates to field coordinates
       const fieldPos = screenToField(mx, my, state.view.panX, state.view.panY, state.view.zoom)
 
-      // Check if clicked on a player (within 25px radius)
       const clickedPlayer = play.players.find(player => {
         const dx = player.x - fieldPos.lx
         const dy = player.y - fieldPos.ly
-        const distance = Math.sqrt(dx * dx + dy * dy)
-        return distance < 25
+        return Math.sqrt(dx * dx + dy * dy) < 30
       })
 
-      // Check if clicked on ball (within 15px radius)
-      const clickedBall = (() => {
-        const dx = play.ball.x - fieldPos.lx
-        const dy = play.ball.y - fieldPos.ly
-        return Math.sqrt(dx * dx + dy * dy) < 15
-      })()
-
       if (clickedPlayer) {
-        // Player clicked
+        clickedPlayerRef.current = true
         if (state.multiSelect) {
           state.toggleSelectedPlayer(clickedPlayer.id)
         } else {
@@ -153,72 +143,36 @@ export const FieldCanvas: React.FC = () => {
         return
       }
 
+      const clickedBall = Math.sqrt((play.ball.x - fieldPos.lx) ** 2 + (play.ball.y - fieldPos.ly) ** 2) < 20
       if (clickedBall) {
-        // Ball clicked
+        clickedPlayerRef.current = true
         state.setSelectedPlayer(null)
         state.setSelectedBall(true)
         return
       }
 
-      // Empty space clicked - deselect all
+      // Empty space - deselect all
       state.setSelectedPlayer(null)
       state.setSelectedBall(false)
     }
 
-    container.addEventListener('click', onClick)
-    return () => container.removeEventListener('click', onClick)
+    container.addEventListener('mousedown', onMouseDown)
+    return () => container.removeEventListener('mousedown', onMouseDown)
   }, [])
 
-  // Selection via Stage onMouseDown using coordinate detection
+  // Stage only handles panning (selection is done by native mousedown listener)
   const handleStageMouseDown = useCallback((e: any) => {
+    // If native handler already detected a player/ball click, skip panning
+    if (clickedPlayerRef.current) {
+      clickedPlayerRef.current = false
+      return
+    }
+
     const stg = e.target.getStage()
     if (!stg) return
     const p = stg.getPointerPosition()
     if (!p) return
 
-    const state = useStore.getState()
-    const play = state.plays.find(pl => pl.id === state.currentPlayId)
-    if (!play) return
-
-    // Convert screen coordinates to field coordinates
-    const fieldPos = screenToField(p.x, p.y, state.view.panX, state.view.panY, state.view.zoom)
-
-    // Check if clicked on a player (within 25px radius)
-    const clickedPlayer = play.players.find(player => {
-      const dx = player.x - fieldPos.lx
-      const dy = player.y - fieldPos.ly
-      const distance = Math.sqrt(dx * dx + dy * dy)
-      return distance < 25
-    })
-
-    // Check if clicked on ball (within 15px radius)
-    const clickedBall = (() => {
-      const dx = play.ball.x - fieldPos.lx
-      const dy = play.ball.y - fieldPos.ly
-      return Math.sqrt(dx * dx + dy * dy) < 15
-    })()
-
-    if (clickedPlayer) {
-      // Player clicked
-      if (state.multiSelect) {
-        state.toggleSelectedPlayer(clickedPlayer.id)
-      } else {
-        state.setSelectedPlayer(clickedPlayer.id)
-      }
-      state.setSelectedBall(false)
-      return
-    }
-
-    if (clickedBall) {
-      // Ball clicked
-      state.setSelectedPlayer(null)
-      state.setSelectedBall(true)
-      return
-    }
-
-    // Empty space clicked - deselect all and start panning
-    state.setSelectedPlayer(null)
-    state.setSelectedBall(false)
     isPanning.current = true
     lastPan.current = { x: p.x, y: p.y }
   }, [])
