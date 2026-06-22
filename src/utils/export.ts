@@ -28,45 +28,78 @@ export function downloadCsv(plays: Play[]): void {
   URL.revokeObjectURL(url)
 }
 
-export async function exportToMp4(
-  canvasElement: HTMLCanvasElement,
-  duration: number,
-  onProgress?: (progress: number) => void
-): Promise<Blob | null> {
-  const stream = canvasElement.captureStream(30)
-  const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' })
-  const chunks: BlobPart[] = []
+// Formatos de video por orden de preferencia. MP4 primero (más compatible para
+// compartir y reproducir); WebM como respaldo si el navegador no soporta MP4.
+const VIDEO_MIMES: { mime: string; ext: string }[] = [
+  { mime: 'video/mp4;codecs=avc1.42E01E', ext: 'mp4' },
+  { mime: 'video/mp4', ext: 'mp4' },
+  { mime: 'video/webm;codecs=vp9', ext: 'webm' },
+  { mime: 'video/webm;codecs=vp8', ext: 'webm' },
+  { mime: 'video/webm', ext: 'webm' },
+]
 
-  return new Promise((resolve) => {
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunks.push(e.data)
-    }
-
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(chunks, { type: 'video/webm' })
-      resolve(blob)
-    }
-
-    mediaRecorder.start()
-
-    const checkProgress = setInterval(() => {
-      if (onProgress) {
-        // approximate progress
-      }
-    }, 200)
-
-    setTimeout(() => {
-      mediaRecorder.stop()
-      clearInterval(checkProgress)
-    }, duration + 500)
-  })
+export function pickVideoMime(): { mime: string; ext: string } | null {
+  if (typeof MediaRecorder === 'undefined') return null
+  for (const c of VIDEO_MIMES) {
+    if (MediaRecorder.isTypeSupported(c.mime)) return c
+  }
+  return null
 }
 
-export function downloadVideo(blob: Blob, name: string): void {
+/**
+ * Graba un video de la animación. Copia el frame actual del stage (vía
+ * `getFrame`) a un canvas propio cada cuadro y captura ese canvas con
+ * MediaRecorder. Requiere que la animación esté reproduciéndose mientras corre.
+ * Devuelve el blob y la extensión real elegida (mp4 o webm).
+ */
+export async function recordStageVideo(
+  getFrame: () => HTMLCanvasElement,
+  width: number,
+  height: number,
+  durationMs: number,
+): Promise<{ blob: Blob; ext: string } | null> {
+  const picked = pickVideoMime()
+  if (!picked) return null
+
+  const out = document.createElement('canvas')
+  out.width = width
+  out.height = height
+  const ctx = out.getContext('2d')
+  if (!ctx) return null
+
+  const stream = out.captureStream(30)
+  const rec = new MediaRecorder(stream, { mimeType: picked.mime, videoBitsPerSecond: 12_000_000 })
+  const chunks: BlobPart[] = []
+  rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data) }
+  const stopped = new Promise<void>((resolve) => { rec.onstop = () => resolve() })
+
+  rec.start(100) // timeslice: emite datos periódicamente → evita archivos sin índice
+  const t0 = performance.now()
+  let raf = 0
+  await new Promise<void>((resolve) => {
+    const loop = () => {
+      ctx.fillStyle = '#0d1117'
+      ctx.fillRect(0, 0, width, height)
+      try { ctx.drawImage(getFrame(), 0, 0, width, height) } catch { /* frame no listo */ }
+      if (performance.now() - t0 >= durationMs) { resolve(); return }
+      raf = requestAnimationFrame(loop)
+    }
+    loop()
+  })
+  cancelAnimationFrame(raf)
+  await new Promise((r) => setTimeout(r, 150)) // último frame
+  rec.stop()
+  await stopped
+
+  if (chunks.length === 0) return null
+  return { blob: new Blob(chunks, { type: picked.mime }), ext: picked.ext }
+}
+
+export function downloadVideo(blob: Blob, name: string, ext: string): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${name.replace(/[^a-z0-9]/gi, '_')}.webm`
+  a.download = `${name.replace(/[^a-z0-9]/gi, '_')}.${ext}`
   a.click()
-  URL.revokeObjectURL(url)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

@@ -34,6 +34,7 @@ export const TrajectoryPath: React.FC<Props> = ({
         lineJoin="round"
         opacity={0.6}
         dash={isBall ? [6, 3] : undefined}
+        tension={0.4}
       />
       {showNodes && points.map((pt, i) => (
         <Circle

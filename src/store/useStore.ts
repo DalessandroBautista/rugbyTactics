@@ -8,9 +8,11 @@ import {
   PlaybackSpeed,
   ViewState,
   DEFAULT_PLAYER_COLORS,
+  AWAY_PLAYER_COLOR,
   FIELD_PX,
   SCALE,
-  PLAY_CATEGORIES,
+  TacticalZone,
+  OverlayImage,
 } from '../types'
 import { loadPlays, savePlays, loadCurrentPlayId, saveCurrentPlayId } from '../utils/persistence'
 
@@ -18,17 +20,28 @@ function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 8)
 }
 
+// Clon profundo para snapshots de historial. structuredClone es nativo y más
+// rápido que JSON.parse(JSON.stringify()); con fallback por si no existe.
+function clonePlays(plays: Play[]): Play[] {
+  return typeof structuredClone === 'function'
+    ? structuredClone(plays)
+    : JSON.parse(JSON.stringify(plays))
+}
+
 function createInitialPlayers(): Player[] {
-  const startX = FIELD_PX.width / 2
-  const startY = FIELD_PX.halfway - 5 * SCALE
-  return Array.from({ length: 15 }, (_, i) => ({
-    id: i + 1,
-    number: i + 1,
-    color: DEFAULT_PLAYER_COLORS[i % DEFAULT_PLAYER_COLORS.length],
-    x: startX + ((i % 5) - 2) * 4 * SCALE,
-    y: startY + Math.floor(i / 5) * 4 * SCALE,
-    trajectory: [],
-  }))
+  return Array.from({ length: 15 }, (_, i) => {
+    const number = i + 1
+    const f = ATTACK_FORMATION[number]
+    return {
+      id: number,
+      number,
+      team: 'home' as const,
+      color: DEFAULT_PLAYER_COLORS[i % DEFAULT_PLAYER_COLORS.length],
+      x: f.ax * SCALE,
+      y: f.ay * SCALE,
+      trajectory: [],
+    }
+  })
 }
 
 function createInitialBall(): Ball {
@@ -78,6 +91,15 @@ interface PlayStore {
   showFormation: 'lineout' | 'scrum' | null
   isDirty: boolean
   multiSelect: boolean
+  requestFit: number
+  loopPlayback: boolean
+  presentationMode: boolean
+  // Posiciones efímeras de la animación. No tocan `plays` (que conserva las
+  // posiciones base), por lo que reproducir no muta ni re-renderiza todo el árbol.
+  animatedPositions: Record<number, { x: number; y: number }> | null
+  animatedBall: { x: number; y: number } | null
+  history: Play[][]       // stack de snapshots anteriores (máx 50)
+  future: Play[][]        // stack para redo
 
   getCurrentPlay: () => Play | null
   setCurrentPlay: (id: string) => void
@@ -88,6 +110,9 @@ interface PlayStore {
   resetPlay: (id: string) => void
   resetMovements: (id: string) => void
   updatePlay: (id: string, updates: Partial<Play>) => void
+  setPlayDuration: (id: string, duration: number) => void
+  addOpponentPlayer: () => void
+  removePlayer: (id: number) => void
 
   setEditMode: (mode: EditMode) => void
   setSelectedPlayer: (id: number | null) => void
@@ -113,6 +138,7 @@ interface PlayStore {
   setPlaybackSpeed: (speed: PlaybackSpeed) => void
   resetPlayback: () => void
   setAnimatingPositions: (positions: Record<number, { x: number; y: number }>, ballPos: { x: number; y: number } | null) => void
+  clearAnimatingPositions: () => void
 
   setZoom: (zoom: number) => void
   setPan: (x: number, y: number) => void
@@ -121,9 +147,43 @@ interface PlayStore {
   toggleLibrary: () => void
   setShowFormation: (type: 'lineout' | 'scrum' | null) => void
   toggleMultiSelect: () => void
+  fitCanvas: () => void
+  toggleLoopPlayback: () => void
+  togglePresentationMode: () => void
 
   loadFromJson: (json: string) => void
   exportToJson: () => string | null
+
+  pushHistory: () => void
+  undo: () => void
+  redo: () => void
+
+  exportPNG: (() => void) | null
+  setExportPNG: (fn: (() => void) | null) => void
+
+  exportVideo: (() => void) | null
+  setExportVideo: (fn: (() => void) | null) => void
+  isExportingVideo: boolean
+
+  snapToGrid: boolean
+  snapSize: number
+  toggleSnapToGrid: () => void
+
+  updatePlayer: (id: number, updates: Partial<Pick<Player, 'name' | 'color' | 'number'>>) => void
+
+  updatePlayTags: (id: string, tags: string[]) => void
+
+  mirrorPlay: (id: string) => void
+
+  addZone: (zone: Omit<TacticalZone, 'id'>) => void
+  removeZone: (id: string) => void
+  updateZone: (id: string, updates: Partial<TacticalZone>) => void
+
+  setOverlayImage: (dataURL: string) => void
+  updateOverlayImage: (updates: Partial<OverlayImage>) => void
+  clearOverlayImage: () => void
+
+  reorderPlays: (fromIndex: number, toIndex: number) => void
 }
 
 export const useStore = create<PlayStore>((set, get) => {
@@ -131,6 +191,24 @@ export const useStore = create<PlayStore>((set, get) => {
   const storedCurrentId = loadCurrentPlayId()
   const initialPlays = storedPlays.length > 0 ? storedPlays : [createPlay('Nueva Jugada', '', 'General')]
   const initialPlayId = storedCurrentId && initialPlays.find(p => p.id === storedCurrentId) ? storedCurrentId : initialPlays[0].id
+
+  /**
+   * Aplica `updater` a la jugada actual y centraliza el patrón repetido:
+   * snapshot de historial (opcional), reemplazo inmutable en `plays`,
+   * `isDirty`, persistencia y campos extra del estado.
+   */
+  const updateCurrentPlay = (
+    updater: (play: Play) => Play,
+    opts: { history?: boolean; save?: boolean; extra?: Partial<PlayStore> } = {},
+  ) => {
+    const state = get()
+    const play = state.plays.find(p => p.id === state.currentPlayId)
+    if (!play) return
+    if (opts.history) get().pushHistory()
+    const newPlays = state.plays.map(p => (p.id === state.currentPlayId ? updater(p) : p))
+    set({ plays: newPlays, isDirty: true, ...(opts.extra ?? {}) })
+    if (opts.save !== false) savePlays(newPlays)
+  }
 
   return {
     plays: initialPlays,
@@ -151,6 +229,18 @@ export const useStore = create<PlayStore>((set, get) => {
     showFormation: null,
     isDirty: false,
     multiSelect: false,
+    requestFit: 0,
+    loopPlayback: false,
+    presentationMode: false,
+    animatedPositions: null,
+    animatedBall: null,
+    history: [],
+    future: [],
+    exportPNG: null,
+    exportVideo: null,
+    isExportingVideo: false,
+    snapToGrid: false,
+    snapSize: SCALE,
 
     getCurrentPlay: () => {
       const state = get()
@@ -158,7 +248,7 @@ export const useStore = create<PlayStore>((set, get) => {
     },
 
     setCurrentPlay: (id) => {
-      set({ currentPlayId: id, currentTime: 0, isPlaying: false, selectedPlayerId: null, selectedPlayerIds: [], selectedBall: false })
+      set({ currentPlayId: id, currentTime: 0, isPlaying: false, selectedPlayerId: null, selectedPlayerIds: [], selectedBall: false, animatedPositions: null, animatedBall: null })
       saveCurrentPlayId(id)
     },
 
@@ -175,7 +265,7 @@ export const useStore = create<PlayStore>((set, get) => {
       const original = state.plays.find(p => p.id === id)
       if (!original) return
       const duplicate: Play = {
-        ...JSON.parse(JSON.stringify(original)),
+        ...clonePlays([original])[0],
         id: generateId(),
         name: original.name + ' (copia)',
         createdAt: new Date().toISOString(),
@@ -189,6 +279,7 @@ export const useStore = create<PlayStore>((set, get) => {
       const state = get()
       const newPlays = state.plays.filter(p => p.id !== id)
       if (newPlays.length === 0) return
+      get().pushHistory()  // permite deshacer el borrado con Ctrl+Z
       const newId = state.currentPlayId === id ? newPlays[0].id : state.currentPlayId
       set({ plays: newPlays, currentPlayId: newId, isDirty: true })
       savePlays(newPlays)
@@ -201,8 +292,17 @@ export const useStore = create<PlayStore>((set, get) => {
       savePlays(newPlays)
     },
 
+    setPlayDuration: (id, duration) => {
+      const state = get()
+      const d = Math.max(1000, Math.round(duration))
+      const newPlays = state.plays.map(p => p.id === id ? { ...p, duration: d } : p)
+      set({ plays: newPlays, isDirty: true })
+      savePlays(newPlays)
+    },
+
     resetPlay: (id) => {
       const state = get()
+      get().pushHistory()
       const newPlays = state.plays.map(p => {
         if (p.id !== id) return p
         return {
@@ -218,6 +318,7 @@ export const useStore = create<PlayStore>((set, get) => {
 
     resetMovements: (id) => {
       const state = get()
+      get().pushHistory()
       const newPlays = state.plays.map(p => {
         if (p.id !== id) return p
         const players = p.players.map(pl => ({ ...pl, trajectory: [] }))
@@ -225,6 +326,52 @@ export const useStore = create<PlayStore>((set, get) => {
         return { ...p, players, ball }
       })
       set({ plays: newPlays, isDirty: true, currentTime: 0, isPlaying: false })
+      savePlays(newPlays)
+    },
+
+    addOpponentPlayer: () => {
+      const state = get()
+      const play = state.plays.find(p => p.id === state.currentPlayId)
+      if (!play) return
+      const awayPlayers = play.players.filter(p => p.team === 'away')
+      if (awayPlayers.length >= 15) return
+      get().pushHistory()
+      const maxId = awayPlayers.length > 0 ? Math.max(...awayPlayers.map(p => p.id)) : 100
+      const number = awayPlayers.length + 1
+      const col = awayPlayers.length % 5
+      const row = Math.floor(awayPlayers.length / 5)
+      const newPlayer: Player = {
+        id: maxId + 1,
+        number,
+        team: 'away',
+        color: AWAY_PLAYER_COLOR,
+        x: FIELD_PX.width / 2 + (col - 2) * 4 * SCALE,
+        y: FIELD_PX.halfway + 5 * SCALE + row * 4 * SCALE,
+        trajectory: [],
+      }
+      const newPlays = state.plays.map(p =>
+        p.id === state.currentPlayId ? { ...p, players: [...p.players, newPlayer] } : p
+      )
+      set({ plays: newPlays, isDirty: true })
+      savePlays(newPlays)
+    },
+
+    removePlayer: (id) => {
+      const state = get()
+      const play = state.plays.find(p => p.id === state.currentPlayId)
+      if (!play) return
+      get().pushHistory()
+      const newPlays = state.plays.map(p => {
+        if (p.id !== state.currentPlayId) return p
+        return { ...p, players: p.players.filter(pl => pl.id !== id) }
+      })
+      const newSelectedIds = state.selectedPlayerIds.filter(i => i !== id)
+      set({
+        plays: newPlays,
+        isDirty: true,
+        selectedPlayerIds: newSelectedIds,
+        selectedPlayerId: newSelectedIds.includes(state.selectedPlayerId ?? -1) ? state.selectedPlayerId : null,
+      })
       savePlays(newPlays)
     },
 
@@ -239,64 +386,53 @@ export const useStore = create<PlayStore>((set, get) => {
     setSelectedBall: (selected) => set({ selectedBall: selected, selectedPlayerId: null, selectedPlayerIds: [] }),
 
     movePlayer: (id, x, y) => {
-      const state = get()
-      const play = state.plays.find(p => p.id === state.currentPlayId)
-      if (!play) return
-      const newPlayers = play.players.map(p =>
-        p.id === id ? { ...p, x, y } : p
+      updateCurrentPlay(
+        play => ({ ...play, players: play.players.map(p => (p.id === id ? { ...p, x, y } : p)) }),
+        { history: true, extra: { animatedPositions: null, animatedBall: null } },
       )
-      const newPlays = state.plays.map(p =>
-        p.id === state.currentPlayId ? { ...p, players: newPlayers } : p
-      )
-      set({ plays: newPlays, isDirty: true })
     },
 
     moveBall: (x, y) => {
-      const state = get()
-      const newPlays = state.plays.map(p => {
-        if (p.id !== state.currentPlayId) return p
-        return { ...p, ball: { ...p.ball, x, y } }
-      })
-      set({ plays: newPlays, isDirty: true })
+      updateCurrentPlay(
+        play => ({ ...play, ball: { ...play.ball, x, y } }),
+        { history: true, extra: { animatedPositions: null, animatedBall: null } },
+      )
     },
 
     setBallCarrier: (playerId) => {
-      const state = get()
-      const newPlays = state.plays.map(p => {
-        if (p.id !== state.currentPlayId) return p
-        const player = playerId ? p.players.find(pl => pl.id === playerId) : null
-        const ballX = player ? player.x : p.ball.x
-        const ballY = player ? player.y : p.ball.y
-        return { ...p, ball: { ...p.ball, carriedBy: playerId, x: ballX, y: ballY } }
-      })
-      set({ plays: newPlays, isDirty: true })
+      updateCurrentPlay(play => {
+        const player = playerId ? play.players.find(pl => pl.id === playerId) : null
+        const ballX = player ? player.x : play.ball.x
+        const ballY = player ? player.y : play.ball.y
+        return { ...play, ball: { ...play.ball, carriedBy: playerId, x: ballX, y: ballY } }
+      }, { save: false })
     },
 
     startRecording: () => {
       const state = get()
-      if (state.selectedPlayerId === null && !state.selectedBall) return
-      if (state.selectedPlayerId !== null) {
-        const playerId = state.selectedPlayerId
-        const play = state.plays.find(p => p.id === state.currentPlayId)
-        if (!play) return
+      const play = state.plays.find(p => p.id === state.currentPlayId)
+      if (!play) return
+
+      const movements: RecordedMovement[] = []
+
+      // Todos los jugadores seleccionados
+      for (const playerId of state.selectedPlayerIds) {
         const player = play.players.find(p => p.id === playerId)
-        if (!player) return
-        const startPoint: TrajectoryPoint = { x: player.x, y: player.y, time: 0 }
-        set({
-          isRecording: true,
-          recordingStartTime: performance.now(),
-          recordedMovements: [{ playerId, points: [startPoint] }],
-        })
-      } else if (state.selectedBall) {
-        const play = state.plays.find(p => p.id === state.currentPlayId)
-        if (!play) return
-        const startPoint: TrajectoryPoint = { x: play.ball.x, y: play.ball.y, time: 0 }
-        set({
-          isRecording: true,
-          recordingStartTime: performance.now(),
-          recordedMovements: [{ playerId: -1, points: [startPoint] }],
-        })
+        if (player) movements.push({ playerId, points: [{ x: player.x, y: player.y, time: 0 }] })
       }
+
+      // Pelota si está seleccionada
+      if (state.selectedBall) {
+        movements.push({ playerId: -1, points: [{ x: play.ball.x, y: play.ball.y, time: 0 }] })
+      }
+
+      if (movements.length === 0) return
+
+      set({
+        isRecording: true,
+        recordingStartTime: performance.now(),
+        recordedMovements: movements,
+      })
     },
 
     stopRecording: () => {
@@ -323,6 +459,7 @@ export const useStore = create<PlayStore>((set, get) => {
       if (!state.isRecording) return
       const play = state.plays.find(p => p.id === state.currentPlayId)
       if (!play) return
+      get().pushHistory()
       let newPlays = [...state.plays]
       let maxDuration = play.duration
       for (const movement of state.recordedMovements) {
@@ -357,80 +494,43 @@ export const useStore = create<PlayStore>((set, get) => {
     },
 
     updateTrajectoryPoint: (playerId, pointIndex, x, y) => {
-      const state = get()
-      const play = state.plays.find(p => p.id === state.currentPlayId)
-      if (!play) return
-      const newPlays = state.plays.map(p => {
-        if (p.id !== state.currentPlayId) return p
-        const newPlayers = p.players.map(pl => {
-          if (pl.id !== playerId) return pl
-          const newTrajectory = pl.trajectory.map((pt, i) =>
-            i === pointIndex ? { ...pt, x, y } : pt
-          )
-          return { ...pl, trajectory: newTrajectory }
-        })
-        return { ...p, players: newPlayers }
-      })
-      set({ plays: newPlays, isDirty: true })
-      savePlays(newPlays)
+      updateCurrentPlay(play => ({
+        ...play,
+        players: play.players.map(pl =>
+          pl.id === playerId
+            ? { ...pl, trajectory: pl.trajectory.map((pt, i) => (i === pointIndex ? { ...pt, x, y } : pt)) }
+            : pl,
+        ),
+      }), { history: true })
     },
 
     deleteTrajectoryPoint: (playerId, pointIndex) => {
-      const state = get()
-      const play = state.plays.find(p => p.id === state.currentPlayId)
-      if (!play) return
-      const newPlays = state.plays.map(p => {
-        if (p.id !== state.currentPlayId) return p
-        const newPlayers = p.players.map(pl => {
-          if (pl.id !== playerId) return pl
-          const newTrajectory = pl.trajectory.filter((_, i) => i !== pointIndex)
-          return { ...pl, trajectory: newTrajectory }
-        })
-        return { ...p, players: newPlayers }
-      })
-      set({ plays: newPlays, isDirty: true })
-      savePlays(newPlays)
+      updateCurrentPlay(play => ({
+        ...play,
+        players: play.players.map(pl =>
+          pl.id === playerId ? { ...pl, trajectory: pl.trajectory.filter((_, i) => i !== pointIndex) } : pl,
+        ),
+      }), { history: true })
     },
 
     addTrajectoryPoint: (playerId, point) => {
-      const state = get()
-      const play = state.plays.find(p => p.id === state.currentPlayId)
-      if (!play) return
-      const newPlays = state.plays.map(p => {
-        if (p.id !== state.currentPlayId) return p
-        const newPlayers = p.players.map(pl => {
-          if (pl.id !== playerId) return pl
-          return { ...pl, trajectory: [...pl.trajectory, point] }
-        })
-        return { ...p, players: newPlayers }
-      })
-      set({ plays: newPlays, isDirty: true })
-      savePlays(newPlays)
+      updateCurrentPlay(play => ({
+        ...play,
+        players: play.players.map(pl =>
+          pl.id === playerId ? { ...pl, trajectory: [...pl.trajectory, point] } : pl,
+        ),
+      }), { history: true })
     },
 
     clearPlayerTrajectory: (playerId) => {
-      const state = get()
-      const play = state.plays.find(p => p.id === state.currentPlayId)
-      if (!play) return
-      const newPlays = state.plays.map(p => {
-        if (p.id !== state.currentPlayId) return p
-        const newPlayers = p.players.map(pl =>
-          pl.id === playerId ? { ...pl, trajectory: [] } : pl
-        )
-        return { ...p, players: newPlayers }
-      })
-      set({ plays: newPlays, isDirty: true })
-      savePlays(newPlays)
+      updateCurrentPlay(play => ({
+        ...play,
+        players: play.players.map(pl => (pl.id === playerId ? { ...pl, trajectory: [] } : pl)),
+      }), { history: true })
     },
 
     clearBallTrajectory: () => {
-      const state = get()
-      const newPlays = state.plays.map(p => {
-        if (p.id !== state.currentPlayId) return p
-        return { ...p, ball: { ...p.ball, trajectory: [] } }
-      })
-      set({ plays: newPlays, isDirty: true })
-      savePlays(newPlays)
+      updateCurrentPlay(play => ({ ...play, ball: { ...play.ball, trajectory: [] } }), { history: true })
     },
 
     setIsPlaying: (playing) => set({ isPlaying: playing }),
@@ -438,31 +538,37 @@ export const useStore = create<PlayStore>((set, get) => {
     setPlaybackSpeed: (speed) => set({ playbackSpeed: speed }),
 
     resetPlayback: () => {
-      set({ currentTime: 0, isPlaying: false })
+      set({ currentTime: 0, isPlaying: false, animatedPositions: null, animatedBall: null })
     },
 
+    // Solo actualiza el estado efímero de animación. NO muta `plays`: las
+    // posiciones base se conservan y el canvas las combina al renderizar.
     setAnimatingPositions: (positions, ballPos) => {
-      const state = get()
-      const play = state.plays.find(p => p.id === state.currentPlayId)
-      if (!play) return
-      const newPlayers = play.players.map(p => {
-        const pos = positions[p.id]
-        return pos ? { ...p, x: pos.x, y: pos.y } : p
-      })
-      const newBall = ballPos ? { ...play.ball, x: ballPos.x, y: ballPos.y } : play.ball
-      const newPlays = state.plays.map(p =>
-        p.id === state.currentPlayId ? { ...p, players: newPlayers, ball: newBall } : p
-      )
-      set({ plays: newPlays })
+      set({ animatedPositions: positions, animatedBall: ballPos })
     },
 
-    setZoom: (zoom) => set(state => ({ view: { ...state.view, zoom: Math.max(0.3, Math.min(2, zoom)) } })),
+    clearAnimatingPositions: () => set({ animatedPositions: null, animatedBall: null }),
+
+    setZoom: (zoom) => set(state => ({ view: { ...state.view, zoom: Math.max(0.1, Math.min(10, zoom)) } })),
     setPan: (x, y) => set(state => ({ view: { ...state.view, panX: x, panY: y } })),
 
     toggleExportDialog: () => set(state => ({ showExportDialog: !state.showExportDialog })),
     toggleLibrary: () => set(state => ({ showLibrary: !state.showLibrary })),
     setShowFormation: (type) => set({ showFormation: type }),
     toggleMultiSelect: () => set(state => ({ multiSelect: !state.multiSelect })),
+    fitCanvas: () => set(state => ({ requestFit: state.requestFit + 1 })),
+    toggleLoopPlayback: () => set(state => ({ loopPlayback: !state.loopPlayback })),
+    togglePresentationMode: () => set(state => ({
+      presentationMode: !state.presentationMode,
+      // al entrar: salir de edición, deseleccionar, recentrar
+      editMode: !state.presentationMode ? 'select' : state.editMode,
+      selectedPlayerId: null,
+      selectedPlayerIds: [],
+      selectedBall: false,
+      isPlaying: false,
+      currentTime: 0,
+      requestFit: state.requestFit + 1,
+    })),
 
     loadFromJson: (json) => {
       try {
@@ -487,6 +593,133 @@ export const useStore = create<PlayStore>((set, get) => {
       const state = get()
       const play = state.plays.find(p => p.id === state.currentPlayId)
       return play ? JSON.stringify(play, null, 2) : null
+    },
+
+    pushHistory: () => {
+      const state = get()
+      const snapshot = clonePlays(state.plays)
+      set({
+        history: [...state.history.slice(-49), snapshot],
+        future: [],
+      })
+    },
+
+    undo: () => {
+      const state = get()
+      if (state.history.length === 0) return
+      const prev = state.history[state.history.length - 1]
+      const currentSnapshot = clonePlays(state.plays)
+      set({
+        plays: prev,
+        history: state.history.slice(0, -1),
+        future: [currentSnapshot, ...state.future.slice(0, 49)],
+        isDirty: true,
+      })
+      savePlays(prev)
+    },
+
+    redo: () => {
+      const state = get()
+      if (state.future.length === 0) return
+      const next = state.future[0]
+      const currentSnapshot = clonePlays(state.plays)
+      set({
+        plays: next,
+        history: [...state.history.slice(-49), currentSnapshot],
+        future: state.future.slice(1),
+        isDirty: true,
+      })
+      savePlays(next)
+    },
+
+    setExportPNG: (fn) => set({ exportPNG: fn }),
+    setExportVideo: (fn) => set({ exportVideo: fn }),
+
+    toggleSnapToGrid: () => set(state => ({ snapToGrid: !state.snapToGrid })),
+
+    updatePlayer: (id, updates) => {
+      updateCurrentPlay(play => ({
+        ...play,
+        players: play.players.map(pl => (pl.id === id ? { ...pl, ...updates } : pl)),
+      }), { history: true })
+    },
+
+    updatePlayTags: (id, tags) => {
+      const state = get()
+      const newPlays = state.plays.map(p => p.id === id ? { ...p, tags } : p)
+      set({ plays: newPlays, isDirty: true })
+      savePlays(newPlays)
+    },
+
+    mirrorPlay: (id) => {
+      const state = get()
+      const play = state.plays.find(p => p.id === id)
+      if (!play) return
+      get().pushHistory()
+      const newPlayers = play.players.map(p => ({
+        ...p,
+        x: -p.x,
+        trajectory: p.trajectory.map(pt => ({ ...pt, x: -pt.x })),
+      }))
+      const newBall = {
+        ...play.ball,
+        x: -play.ball.x,
+        trajectory: play.ball.trajectory.map(pt => ({ ...pt, x: -pt.x })),
+      }
+      const newPlay = { ...play, players: newPlayers, ball: newBall }
+      const newPlays = state.plays.map(p => p.id === id ? newPlay : p)
+      set({ plays: newPlays, isDirty: true })
+      savePlays(newPlays)
+    },
+
+    addZone: (zone) => {
+      const newZone: TacticalZone = { ...zone, id: generateId() }
+      updateCurrentPlay(play => ({ ...play, zones: [...(play.zones ?? []), newZone] }))
+    },
+
+    removeZone: (id) => {
+      updateCurrentPlay(play => ({ ...play, zones: (play.zones ?? []).filter(z => z.id !== id) }))
+    },
+
+    updateZone: (id, updates) => {
+      updateCurrentPlay(play => ({
+        ...play,
+        zones: (play.zones ?? []).map(z => (z.id === id ? { ...z, ...updates } : z)),
+      }))
+    },
+
+    setOverlayImage: (dataURL) => {
+      const overlay: OverlayImage = {
+        dataURL,
+        x: FIELD_PX.width / 2 - 100,
+        y: FIELD_PX.totalLength / 2 - 100,
+        width: 200,
+        height: 200,
+        opacity: 0.5,
+      }
+      updateCurrentPlay(play => ({ ...play, overlayImage: overlay }))
+    },
+
+    updateOverlayImage: (updates) => {
+      updateCurrentPlay(play =>
+        play.overlayImage ? { ...play, overlayImage: { ...play.overlayImage, ...updates } } : play,
+      )
+    },
+
+    clearOverlayImage: () => {
+      updateCurrentPlay(play => {
+        const { overlayImage: _omit, ...rest } = play
+        return rest as Play
+      })
+    },
+
+    reorderPlays: (from, to) => {
+      const state = get()
+      const newPlays = [...state.plays]
+      const [moved] = newPlays.splice(from, 1)
+      newPlays.splice(to, 0, moved)
+      set({ plays: newPlays, isDirty: true })
+      savePlays(newPlays)
     },
   }
 })

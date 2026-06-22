@@ -1,6 +1,6 @@
 import React, { useRef } from 'react'
 import { useStore } from '../store/useStore'
-import { downloadJson, downloadCsv, downloadVideo, exportToMp4 } from '../utils/export'
+import { downloadJson, downloadCsv } from '../utils/export'
 
 export const ExportDialog: React.FC = () => {
   const showExportDialog = useStore(s => s.showExportDialog)
@@ -8,10 +8,10 @@ export const ExportDialog: React.FC = () => {
   const exportToJson = useStore(s => s.exportToJson)
   const plays = useStore(s => s.plays)
   const currentPlayId = useStore(s => s.currentPlayId)
+  const exportVideo = useStore(s => s.exportVideo)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const importRef = useStore(s => s.loadFromJson)
   const [importError, setImportError] = React.useState<string | null>(null)
-  const [exportingVideo, setExportingVideo] = React.useState(false)
 
   if (!showExportDialog) return null
 
@@ -28,20 +28,11 @@ export const ExportDialog: React.FC = () => {
     downloadCsv(plays)
   }
 
-  const handleExportVideo = async () => {
-    const canvas = document.querySelector('canvas')
-    if (!canvas || !play) return
-
-    setExportingVideo(true)
-    try {
-      const blob = await exportToMp4(canvas, play.duration)
-      if (blob) {
-        downloadVideo(blob, play.name)
-      }
-    } catch (err) {
-      console.error('Video export failed:', err)
-    }
-    setExportingVideo(false)
+  const handleExportVideo = () => {
+    if (!play || !exportVideo) return
+    // Cerrar el diálogo para que la animación quede visible mientras se graba
+    toggleExportDialog()
+    exportVideo()
   }
 
   const handleImport = () => {
@@ -112,11 +103,8 @@ export const ExportDialog: React.FC = () => {
           <button onClick={handleExportJson} style={exportButtonStyle}>
             📄 Export as JSON
           </button>
-          <button onClick={handleExportVideo} disabled={exportingVideo} style={{
-            ...exportButtonStyle,
-            opacity: exportingVideo ? 0.6 : 1,
-          }}>
-            {exportingVideo ? '⏳ Exporting...' : '🎬 Export as Video (WebM)'}
+          <button onClick={handleExportVideo} style={exportButtonStyle}>
+            🎬 Exportar como video (MP4)
           </button>
 
           <div style={{ borderTop: '1px solid #3a3a4e', paddingTop: '12px', marginTop: '4px' }}>

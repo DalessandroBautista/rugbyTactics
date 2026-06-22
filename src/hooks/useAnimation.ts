@@ -42,10 +42,19 @@ export function useAnimation() {
       current += delta
 
       if (current >= duration) {
-        state.setCurrentTime(duration)
-        const positions = computeAllPositions(play.players, play.ball, duration)
-        state.setAnimatingPositions(positions.playerPositions, positions.ballPosition)
-        state.setIsPlaying(false)
+        const loop = state.loopPlayback
+        if (loop) {
+          current = 0
+          lastTimeRef.current = timestamp
+          const positions = computeAllPositions(play.players, play.ball, 0)
+          state.setAnimatingPositions(positions.playerPositions, positions.ballPosition)
+          state.setCurrentTime(0)
+        } else {
+          state.setCurrentTime(duration)
+          const positions = computeAllPositions(play.players, play.ball, duration)
+          state.setAnimatingPositions(positions.playerPositions, positions.ballPosition)
+          state.setIsPlaying(false)
+        }
         return
       }
 

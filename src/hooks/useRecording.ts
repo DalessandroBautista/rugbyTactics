@@ -6,9 +6,6 @@ export function useRecording() {
   const minDistance = 3
 
   const isRecording = useStore(s => s.isRecording)
-  const selectedPlayerId = useStore(s => s.selectedPlayerId)
-  const selectedBall = useStore(s => s.selectedBall)
-  const recordedMovements = useStore(s => s.recordedMovements)
   const addRecordingPoint = useStore(s => s.addRecordingPoint)
   const finishRecording = useStore(s => s.finishRecording)
   const stopRecording = useStore(s => s.stopRecording)

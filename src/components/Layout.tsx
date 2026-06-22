@@ -6,6 +6,8 @@ import { FieldCanvas } from './FieldCanvas'
 import { PlayLibrary } from './PlayLibrary'
 import { ExportDialog } from './ExportDialog'
 import { FormationDialog } from './FormationDialog'
+import { PresentationBar } from './PresentationBar'
+import { WelcomeOverlay } from './WelcomeOverlay'
 import { useStore } from '../store/useStore'
 
 export const Layout: React.FC = () => {
@@ -13,8 +15,20 @@ export const Layout: React.FC = () => {
   const currentPlayId = useStore(s => s.currentPlayId)
   const isRecording = useStore(s => s.isRecording)
   const showFormation = useStore(s => s.showFormation)
+  const presentationMode = useStore(s => s.presentationMode)
+  const isExportingVideo = useStore(s => s.isExportingVideo)
 
   const play = plays.find(p => p.id === currentPlayId)
+
+  // ── Modo presentación: solo campo + controles flotantes ──
+  if (presentationMode) {
+    return (
+      <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: 'var(--bg)', position: 'relative' }}>
+        <FieldCanvas />
+        {play && <PresentationBar />}
+      </div>
+    )
+  }
 
   return (
     <div style={{
@@ -23,7 +37,7 @@ export const Layout: React.FC = () => {
       width: '100vw',
       height: '100vh',
       overflow: 'hidden',
-      background: '#16162a',
+      background: 'var(--bg)',
     }}>
       <TopBar />
       <div style={{
@@ -46,28 +60,25 @@ export const Layout: React.FC = () => {
       {isRecording && (
         <div style={{
           position: 'fixed',
-          top: '52px',
+          top: 44,
           left: '50%',
           transform: 'translateX(-50%)',
-          background: '#e74c3c',
+          background: 'var(--red)',
           color: '#fff',
-          padding: '6px 16px',
-          borderRadius: '0 0 8px 8px',
-          fontSize: '12px',
-          fontWeight: 'bold',
+          padding: '4px 14px',
+          borderRadius: '0 0 6px 6px',
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: '0.5px',
           zIndex: 500,
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
+          gap: 6,
           animation: 'pulse 1s infinite',
+          userSelect: 'none',
         }}>
-          <div style={{
-            width: '8px',
-            height: '8px',
-            borderRadius: '50%',
-            background: '#fff',
-          }} />
-          RECORDING - Press G to stop
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />
+          GRABANDO — Presioná G para detener
         </div>
       )}
 
@@ -79,6 +90,36 @@ export const Layout: React.FC = () => {
           onClose={() => useStore.getState().setShowFormation(null)}
         />
       )}
+      {isExportingVideo && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(8,11,15,0.55)',
+          zIndex: 1500,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 12,
+          pointerEvents: 'none',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            background: 'var(--panel)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-md)',
+            padding: '12px 20px',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--red)', animation: 'pulse 1s infinite' }} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+              Grabando video… dejá que la jugada termine de reproducirse
+            </span>
+          </div>
+        </div>
+      )}
+
+      <WelcomeOverlay />
     </div>
   )
 }

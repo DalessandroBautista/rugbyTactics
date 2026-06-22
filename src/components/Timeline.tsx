@@ -2,6 +2,8 @@ import React from 'react'
 import { useStore } from '../store/useStore'
 import { PlaybackSpeed } from '../types'
 
+const SPEEDS: PlaybackSpeed[] = [0.5, 1, 2, 4]
+
 export const Timeline: React.FC = () => {
   const isPlaying = useStore(s => s.isPlaying)
   const currentTime = useStore(s => s.currentTime)
@@ -13,32 +15,21 @@ export const Timeline: React.FC = () => {
   const setPlaybackSpeed = useStore(s => s.setPlaybackSpeed)
   const resetPlayback = useStore(s => s.resetPlayback)
   const setAnimatingPositions = useStore(s => s.setAnimatingPositions)
-  const movePlayer = useStore(s => s.movePlayer)
-  const moveBall = useStore(s => s.moveBall)
+  const loopPlayback = useStore(s => s.loopPlayback)
+  const toggleLoopPlayback = useStore(s => s.toggleLoopPlayback)
 
   const play = plays.find(p => p.id === currentPlayId)
   const duration = play?.duration || 5000
+  const progress = Math.min(currentTime / duration, 1)
 
   const handlePlay = () => {
-    if (currentTime >= duration) {
-      setCurrentTime(0)
-    }
+    if (currentTime >= duration) setCurrentTime(0)
     setIsPlaying(true)
   }
 
-  const handlePause = () => {
-    setIsPlaying(false)
-  }
-
   const handleStop = () => {
+    // resetPlayback limpia el estado animado → el canvas vuelve a las posiciones base
     resetPlayback()
-    if (play) {
-      const positions: Record<number, { x: number; y: number }> = {}
-      for (const player of play.players) {
-        positions[player.id] = { x: player.x, y: player.y }
-      }
-      setAnimatingPositions(positions, { x: play.ball.x, y: play.ball.y })
-    }
   }
 
   const handleRestart = () => {
@@ -47,11 +38,9 @@ export const Timeline: React.FC = () => {
     if (play) {
       const positions: Record<number, { x: number; y: number }> = {}
       for (const player of play.players) {
-        if (player.trajectory.length > 0) {
-          positions[player.id] = { x: player.trajectory[0].x, y: player.trajectory[0].y }
-        } else {
-          positions[player.id] = { x: player.x, y: player.y }
-        }
+        positions[player.id] = player.trajectory.length > 0
+          ? { x: player.trajectory[0].x, y: player.trajectory[0].y }
+          : { x: player.x, y: player.y }
       }
       const ballPos = play.ball.trajectory.length > 0
         ? { x: play.ball.trajectory[0].x, y: play.ball.trajectory[0].y }
@@ -60,131 +49,147 @@ export const Timeline: React.FC = () => {
     }
   }
 
-  const handleSpeedChange = (speed: PlaybackSpeed) => {
-    setPlaybackSpeed(speed)
+  const fmt = (ms: number) => {
+    const s = Math.floor(ms / 1000)
+    const m = Math.floor(s / 60)
+    const dec = Math.floor((ms % 1000) / 100)
+    return `${m}:${(s % 60).toString().padStart(2, '0')}.${dec}`
   }
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const time = parseFloat(e.target.value)
-    setCurrentTime(time)
-  }
-
-  const formatTime = (ms: number) => {
-    const totalSeconds = Math.floor(ms / 1000)
-    const minutes = Math.floor(totalSeconds / 60)
-    const seconds = totalSeconds % 60
-    const millis = Math.floor((ms % 1000) / 100)
-    return `${minutes}:${seconds.toString().padStart(2, '0')}.${millis}`
-  }
-
-  const speeds: PlaybackSpeed[] = [0.5, 1, 2, 4]
 
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      padding: '8px 16px',
-      background: '#2a2a3e',
-      borderTop: '1px solid #3a3a4e',
-      minHeight: '48px',
-      flexWrap: 'wrap',
-    }}>
-      <button
-        onClick={handleRestart}
-        style={buttonStyle}
-        title="Restart"
-      >
-        ⏮
-      </button>
-      <button
-        onClick={isPlaying ? handlePause : handlePlay}
-        style={{ ...buttonStyle, background: isPlaying ? '#e74c3c' : '#2ecc71' }}
-        title={isPlaying ? 'Pause' : 'Play'}
-      >
-        {isPlaying ? '⏸' : '▶'}
-      </button>
-      <button
-        onClick={handleStop}
-        style={buttonStyle}
-        title="Stop"
-      >
-        ⏹
-      </button>
+    <div style={styles.bar}>
+      {/* Transport controls */}
+      <div style={styles.controls}>
+        <TBtn onClick={handleRestart} title="Restart">⏮</TBtn>
+        <TBtn
+          onClick={isPlaying ? () => setIsPlaying(false) : handlePlay}
+          active={isPlaying}
+          title={isPlaying ? 'Pause' : 'Play'}
+          style={{ background: isPlaying ? 'var(--red)' : 'var(--green)', color: '#fff', width: 30 }}
+        >
+          {isPlaying ? '⏸' : '▶'}
+        </TBtn>
+        <TBtn onClick={handleStop} title="Stop">⏹</TBtn>
+      </div>
 
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        minWidth: '150px',
-      }}>
-        <span style={{ color: '#aaa', fontSize: '12px', fontFamily: 'monospace', minWidth: '50px' }}>
-          {formatTime(currentTime)}
-        </span>
+      {/* Seek bar */}
+      <span style={styles.time}>{fmt(currentTime)}</span>
+      <div style={styles.seekWrap}>
         <input
           type="range"
           min={0}
           max={duration}
           value={currentTime}
-          onChange={handleSeek}
+          onChange={e => setCurrentTime(parseFloat(e.target.value))}
           style={{
-            flex: 1,
-            height: '4px',
-            WebkitAppearance: 'none',
-            appearance: 'none',
-            background: `linear-gradient(to right, #2ecc71 ${(currentTime / duration) * 100}%, #444 ${(currentTime / duration) * 100}%)`,
-            borderRadius: '2px',
-            outline: 'none',
-            cursor: 'pointer',
+            width: '100%',
+            background: `linear-gradient(to right, var(--accent) ${progress * 100}%, var(--border) ${progress * 100}%)`,
           }}
         />
-        <span style={{ color: '#aaa', fontSize: '12px', fontFamily: 'monospace', minWidth: '50px', textAlign: 'right' }}>
-          {formatTime(duration)}
-        </span>
       </div>
+      <span style={{ ...styles.time, color: 'var(--text-dim)' }}>{fmt(duration)}</span>
 
-      <div style={{ display: 'flex', gap: '2px' }}>
-        {speeds.map(speed => (
+      {/* Speed selector */}
+      <div style={styles.speeds}>
+        {SPEEDS.map(s => (
           <button
-            key={speed}
-            onClick={() => handleSpeedChange(speed)}
+            key={s}
+            onClick={() => setPlaybackSpeed(s)}
             style={{
-              ...speedButtonStyle,
-              background: playbackSpeed === speed ? '#3498db' : 'transparent',
-              color: playbackSpeed === speed ? '#fff' : '#888',
-              border: playbackSpeed === speed ? '1px solid #3498db' : '1px solid #444',
+              ...styles.speedBtn,
+              background: playbackSpeed === s ? 'var(--panel-alt)' : 'transparent',
+              color: playbackSpeed === s ? 'var(--accent)' : 'var(--text-dim)',
+              border: `1px solid ${playbackSpeed === s ? 'var(--accent)' : 'transparent'}`,
             }}
           >
-            {speed}x
+            {s}×
           </button>
-        ))}
+        )        )}
       </div>
+
+      {/* Loop toggle */}
+      <button
+        onClick={toggleLoopPlayback}
+        style={{
+          ...styles.speedBtn,
+          background: loopPlayback ? 'var(--panel-alt)' : 'transparent',
+          color: loopPlayback ? 'var(--accent)' : 'var(--text-dim)',
+          border: `1px solid ${loopPlayback ? 'var(--accent)' : 'transparent'}`,
+          marginLeft: 4,
+        }}
+        title="Reproducción en loop"
+      >
+        ↺
+      </button>
     </div>
   )
 }
 
-const buttonStyle: React.CSSProperties = {
-  width: '32px',
-  height: '32px',
+const TBtn: React.FC<{
+  onClick: () => void
+  title?: string
+  active?: boolean
+  style?: React.CSSProperties
+  children: React.ReactNode
+}> = ({ onClick, title, style, children }) => (
+  <button onClick={onClick} title={title} style={{ ...tBtnBase, ...style }}>
+    {children}
+  </button>
+)
+
+const tBtnBase: React.CSSProperties = {
+  width: 28,
+  height: 28,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  border: 'none',
-  borderRadius: '6px',
-  cursor: 'pointer',
-  fontSize: '14px',
-  background: '#3a3a4e',
-  color: '#fff',
-  transition: 'all 0.15s',
+  borderRadius: 'var(--radius-sm)',
+  fontSize: 13,
+  background: 'var(--panel-alt)',
+  color: 'var(--text-muted)',
+  border: '1px solid var(--border)',
 }
 
-const speedButtonStyle: React.CSSProperties = {
-  padding: '4px 8px',
-  fontSize: '11px',
-  fontWeight: 'bold',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontFamily: 'monospace',
-  transition: 'all 0.15s',
+const styles: Record<string, React.CSSProperties> = {
+  bar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '0 12px',
+    background: 'var(--panel)',
+    borderTop: '1px solid var(--border)',
+    height: 44,
+    flexShrink: 0,
+  },
+  controls: {
+    display: 'flex',
+    gap: 4,
+    alignItems: 'center',
+  },
+  time: {
+    fontSize: 11,
+    fontFamily: 'monospace',
+    color: 'var(--text-muted)',
+    minWidth: 48,
+    textAlign: 'center',
+    flexShrink: 0,
+  },
+  seekWrap: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    minWidth: 80,
+  },
+  speeds: {
+    display: 'flex',
+    gap: 2,
+    alignItems: 'center',
+  },
+  speedBtn: {
+    padding: '2px 7px',
+    borderRadius: 'var(--radius-sm)',
+    fontSize: 11,
+    fontFamily: 'monospace',
+    fontWeight: 600,
+  },
 }
