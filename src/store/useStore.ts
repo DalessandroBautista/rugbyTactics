@@ -9,6 +9,7 @@ import {
   ViewState,
   DEFAULT_PLAYER_COLORS,
   AWAY_PLAYER_COLOR,
+  ATTACK_FORMATION,
   FIELD_PX,
   SCALE,
   TacticalZone,
