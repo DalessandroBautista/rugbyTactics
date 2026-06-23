@@ -34,6 +34,7 @@ export const TopBar: React.FC = () => {
   const selectedBall = useStore(s => s.selectedBall)
   const startRecording = useStore(s => s.startRecording)
   const finishRecording = useStore(s => s.finishRecording)
+  const recordingTimeOffset = useStore(s => s.recordingTimeOffset)
   const toggleLibrary = useStore(s => s.toggleLibrary)
   const showLibrary = useStore(s => s.showLibrary)
   const toggleExportDialog = useStore(s => s.toggleExportDialog)
@@ -177,7 +178,9 @@ export const TopBar: React.FC = () => {
           }}
         >
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'currentColor', display: 'inline-block', flexShrink: 0 }} />
-          {isRecording ? 'Detener' : 'Grabar'}
+          {isRecording
+            ? `Detener${recordingTimeOffset > 0 ? ` (${(recordingTimeOffset / 1000).toFixed(1)}s)` : ''}`
+            : 'Grabar'}
         </button>
       )}
 

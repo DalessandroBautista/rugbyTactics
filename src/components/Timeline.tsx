@@ -1,6 +1,7 @@
 import React from 'react'
 import { useStore } from '../store/useStore'
 import { PlaybackSpeed } from '../types'
+import { computeAllPositions } from '../utils/interpolation'
 
 const SPEEDS: PlaybackSpeed[] = [0.5, 1, 2, 4]
 
@@ -80,7 +81,16 @@ export const Timeline: React.FC = () => {
           min={0}
           max={duration}
           value={currentTime}
-          onChange={e => setCurrentTime(parseFloat(e.target.value))}
+          onChange={e => {
+            const t = parseFloat(e.target.value)
+            setCurrentTime(t)
+            // Actualizar posiciones animadas al arrastrar para que el siguiente
+            // "Grabar" arranque exactamente desde la posición visual actual.
+            if (play) {
+              const { playerPositions, ballPosition } = computeAllPositions(play.players, play.ball, t)
+              setAnimatingPositions(playerPositions, ballPosition)
+            }
+          }}
           style={{
             width: '100%',
             background: `linear-gradient(to right, var(--accent) ${progress * 100}%, var(--border) ${progress * 100}%)`,

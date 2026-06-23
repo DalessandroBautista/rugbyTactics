@@ -16,6 +16,7 @@ import {
   OverlayImage,
 } from '../types'
 import { loadPlays, savePlays, loadCurrentPlayId, saveCurrentPlayId } from '../utils/persistence'
+import { getInterpolatedPosition } from '../utils/interpolation'
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 8)
@@ -87,6 +88,7 @@ interface PlayStore {
   selectedBall: boolean
   recordedMovements: RecordedMovement[]
   recordingStartTime: number | null
+  recordingTimeOffset: number
   showExportDialog: boolean
   showLibrary: boolean
   showFormation: 'lineout' | 'scrum' | null
@@ -225,6 +227,7 @@ export const useStore = create<PlayStore>((set, get) => {
     selectedBall: false,
     recordedMovements: [],
     recordingStartTime: null,
+    recordingTimeOffset: 0,
     showExportDialog: false,
     showLibrary: false,
     showFormation: null,
@@ -414,24 +417,50 @@ export const useStore = create<PlayStore>((set, get) => {
       const play = state.plays.find(p => p.id === state.currentPlayId)
       if (!play) return
 
+      // El offset es el tiempo actual de la jugada: la grabación se encadena desde aquí.
+      const timeOffset = state.currentTime
       const movements: RecordedMovement[] = []
 
-      // Todos los jugadores seleccionados
       for (const playerId of state.selectedPlayerIds) {
         const player = play.players.find(p => p.id === playerId)
-        if (player) movements.push({ playerId, points: [{ x: player.x, y: player.y, time: 0 }] })
+        if (player) {
+          // Usar posición animada (si existe) o interpolada desde la trayectoria actual,
+          // para que la nueva grabación arranque exactamente desde donde está el jugador.
+          const animPos = state.animatedPositions?.[playerId]
+          let startX = player.x
+          let startY = player.y
+          if (animPos) {
+            startX = animPos.x
+            startY = animPos.y
+          } else if (player.trajectory.length > 0 && timeOffset > 0) {
+            const pos = getInterpolatedPosition(player.trajectory, timeOffset, { x: player.x, y: player.y })
+            if (pos) { startX = pos.x; startY = pos.y }
+          }
+          movements.push({ playerId, points: [{ x: startX, y: startY, time: timeOffset }] })
+        }
       }
 
-      // Pelota si está seleccionada
       if (state.selectedBall) {
-        movements.push({ playerId: -1, points: [{ x: play.ball.x, y: play.ball.y, time: 0 }] })
+        const animBall = state.animatedBall
+        let startX = play.ball.x
+        let startY = play.ball.y
+        if (animBall) {
+          startX = animBall.x
+          startY = animBall.y
+        } else if (play.ball.trajectory.length > 0 && timeOffset > 0) {
+          const pos = getInterpolatedPosition(play.ball.trajectory, timeOffset, { x: play.ball.x, y: play.ball.y })
+          if (pos) { startX = pos.x; startY = pos.y }
+        }
+        movements.push({ playerId: -1, points: [{ x: startX, y: startY, time: timeOffset }] })
       }
 
       if (movements.length === 0) return
 
       set({
+        isPlaying: false,
         isRecording: true,
         recordingStartTime: performance.now(),
+        recordingTimeOffset: timeOffset,
         recordedMovements: movements,
       })
     },
@@ -445,7 +474,8 @@ export const useStore = create<PlayStore>((set, get) => {
     addRecordingPoint: (playerId, x, y) => {
       const state = get()
       if (!state.isRecording || state.recordingStartTime === null) return
-      const elapsed = performance.now() - state.recordingStartTime
+      // Los timestamps son absolutos: elapsed desde el inicio de la sesión + offset del play.
+      const elapsed = performance.now() - state.recordingStartTime + state.recordingTimeOffset
       set({
         recordedMovements: state.recordedMovements.map(m =>
           m.playerId === playerId
@@ -461,35 +491,51 @@ export const useStore = create<PlayStore>((set, get) => {
       const play = state.plays.find(p => p.id === state.currentPlayId)
       if (!play) return
       get().pushHistory()
+
+      const timeOffset = state.recordingTimeOffset
       let newPlays = [...state.plays]
       let maxDuration = play.duration
+      let newCurrentTime = timeOffset
+
       for (const movement of state.recordedMovements) {
         if (movement.points.length < 2) continue
+        const lastTime = movement.points[movement.points.length - 1].time
+        maxDuration = Math.max(maxDuration, lastTime)
+        newCurrentTime = Math.max(newCurrentTime, lastTime)
+
         if (movement.playerId === -1) {
           newPlays = newPlays.map(p => {
             if (p.id !== state.currentPlayId) return p
-            maxDuration = Math.max(maxDuration, movement.points[movement.points.length - 1].time)
-            return { ...p, ball: { ...p.ball, trajectory: movement.points }, duration: maxDuration }
+            // Conservar puntos anteriores al offset y agregar los nuevos encadenados.
+            const before = p.ball.trajectory.filter(pt => pt.time < timeOffset)
+            return { ...p, ball: { ...p.ball, trajectory: [...before, ...movement.points] } }
           })
         } else {
           newPlays = newPlays.map(p => {
             if (p.id !== state.currentPlayId) return p
-            const newPlayers = p.players.map(pl =>
-              pl.id === movement.playerId
-                ? { ...pl, trajectory: movement.points }
-                : pl
-            )
-            maxDuration = Math.max(maxDuration, movement.points[movement.points.length - 1].time)
-            return { ...p, players: newPlayers, duration: maxDuration }
+            const newPlayers = p.players.map(pl => {
+              if (pl.id !== movement.playerId) return pl
+              const before = pl.trajectory.filter(pt => pt.time < timeOffset)
+              return { ...pl, trajectory: [...before, ...movement.points] }
+            })
+            return { ...p, players: newPlayers }
           })
         }
       }
+
+      // Aplicar duración actualizada a la jugada actual
+      newPlays = newPlays.map(p =>
+        p.id === state.currentPlayId ? { ...p, duration: maxDuration } : p
+      )
+
       set({
         plays: newPlays,
         isRecording: false,
         recordingStartTime: null,
+        recordingTimeOffset: 0,
         recordedMovements: [],
         isDirty: true,
+        currentTime: newCurrentTime,
       })
       savePlays(newPlays)
     },
