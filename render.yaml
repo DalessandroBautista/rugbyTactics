@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: tactics-rugby
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false        # lo ponés a mano en el dashboard de Render
+      - key: JWT_SECRET
+        sync: false        # lo ponés a mano en el dashboard de Render

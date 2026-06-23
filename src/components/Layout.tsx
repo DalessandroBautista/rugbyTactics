@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { TopBar } from './TopBar'
 import { Timeline } from './Timeline'
 import { Sidebar } from './Sidebar'
@@ -8,9 +8,11 @@ import { ExportDialog } from './ExportDialog'
 import { FormationDialog } from './FormationDialog'
 import { PresentationBar } from './PresentationBar'
 import { WelcomeOverlay } from './WelcomeOverlay'
+import { AuthModal } from './AuthModal'
 import { useStore } from '../store/useStore'
 
 export const Layout: React.FC = () => {
+  const [showAuth, setShowAuth] = useState(false)
   const plays = useStore(s => s.plays)
   const currentPlayId = useStore(s => s.currentPlayId)
   const isRecording = useStore(s => s.isRecording)
@@ -39,7 +41,7 @@ export const Layout: React.FC = () => {
       overflow: 'hidden',
       background: 'var(--bg)',
     }}>
-      <TopBar />
+      <TopBar onShowAuth={() => setShowAuth(true)} />
       <div style={{
         display: 'flex',
         flex: 1,
@@ -84,6 +86,7 @@ export const Layout: React.FC = () => {
 
       <PlayLibrary />
       <ExportDialog />
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
       {showFormation && (
         <FormationDialog
           type={showFormation}

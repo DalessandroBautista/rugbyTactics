@@ -187,6 +187,8 @@ interface PlayStore {
   clearOverlayImage: () => void
 
   reorderPlays: (fromIndex: number, toIndex: number) => void
+
+  setPlaysFromServer: (plays: Play[]) => void
 }
 
 export const useStore = create<PlayStore>((set, get) => {
@@ -316,7 +318,7 @@ export const useStore = create<PlayStore>((set, get) => {
           duration: 40000,
         }
       })
-      set({ plays: newPlays, isDirty: true, currentTime: 0, isPlaying: false })
+      set({ plays: newPlays, isDirty: true, currentTime: 0, isPlaying: false, animatedPositions: null, animatedBall: null })
       savePlays(newPlays)
     },
 
@@ -329,7 +331,7 @@ export const useStore = create<PlayStore>((set, get) => {
         const ball = { ...p.ball, trajectory: [] }
         return { ...p, players, ball }
       })
-      set({ plays: newPlays, isDirty: true, currentTime: 0, isPlaying: false })
+      set({ plays: newPlays, isDirty: true, currentTime: 0, isPlaying: false, animatedPositions: null, animatedBall: null })
       savePlays(newPlays)
     },
 
@@ -767,6 +769,17 @@ export const useStore = create<PlayStore>((set, get) => {
       newPlays.splice(to, 0, moved)
       set({ plays: newPlays, isDirty: true })
       savePlays(newPlays)
+    },
+
+    setPlaysFromServer: (serverPlays) => {
+      // Merge: server manda como fuente de verdad.
+      // Las jugadas locales que no están en el servidor (aún no sincronizadas) se conservan.
+      const state = get()
+      const serverIds = new Set(serverPlays.map(p => p.id))
+      const localOnly = state.plays.filter(p => !serverIds.has(p.id))
+      const merged = [...serverPlays, ...localOnly]
+      set({ plays: merged })
+      savePlays(merged)
     },
   }
 })

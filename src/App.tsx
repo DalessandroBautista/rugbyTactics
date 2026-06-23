@@ -1,11 +1,18 @@
 import { useEffect } from 'react'
 import { Layout } from './components/Layout'
 import { useStore } from './store/useStore'
+import { useAuth } from './store/useAuth'
 import { useKeyboard } from './hooks/useKeyboard'
+import { useServerSync } from './hooks/useServerSync'
 import { readSharedPlay, clearShareHash } from './utils/share'
 
 function App() {
   useKeyboard()
+  useServerSync()
+
+  // Restaurar sesión si hay token guardado
+  const checkAuth = useAuth(s => s.checkAuth)
+  useEffect(() => { checkAuth() }, [])
 
   // Cargar una jugada compartida por URL (#play=...) al iniciar
   useEffect(() => {

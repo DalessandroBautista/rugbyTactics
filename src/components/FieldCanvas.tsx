@@ -4,7 +4,7 @@ import { Stage, Layer, Rect, Circle, Text, Group, Image as KonvaImage, Arrow } f
 import { useStore } from '../store/useStore'
 import { FIELD_PX, TacticalZone } from '../types'
 import { savePlays } from '../utils/persistence'
-import { recordStageVideo, downloadVideo, pickVideoMime } from '../utils/export'
+import { recordStageVideo, downloadVideo, shareOrDownloadVideo, pickVideoMime } from '../utils/export'
 import { useAnimation } from '../hooks/useAnimation'
 import { useRecording } from '../hooks/useRecording'
 import { TrajectoryPath } from './TrajectoryPath'
@@ -62,10 +62,36 @@ export const FieldCanvas: React.FC = () => {
 
   // Register exportPNG function with store
   useEffect(() => {
-    const currentPlay = plays.find(p => p.id === currentPlayId)
-    const filename = currentPlay ? `${currentPlay.name || 'jugada'}.png` : 'jugada.png'
     setExportPNG(() => {
-      const url = stageRef.current?.toDataURL({ pixelRatio: 2 })
+      const stage = stageRef.current
+      if (!stage) return
+      const st = useStore.getState()
+      const play = st.plays.find(p => p.id === st.currentPlayId)
+      if (!play) return
+      const filename = `${play.name || 'jugada'}.png`
+
+      // Smart crop: exportar solo el área donde están los jugadores.
+      // Convierte cada posición de jugador al sistema de coordenadas del stage
+      // usando la misma transformación que fieldToScreen (usada en rubber-band).
+      const { zoom, panX, panY } = st.view
+      const screenPts = play.players.map(p => {
+        const ap = st.animatedPositions?.[p.id]
+        const fx = ap?.x ?? p.x
+        const fy = ap?.y ?? p.y
+        return fieldToScreen(fx, fy, panX, panY, zoom)
+      })
+      const ab = st.animatedBall
+      screenPts.push(fieldToScreen(ab?.x ?? play.ball.x, ab?.y ?? play.ball.y, panX, panY, zoom))
+
+      const SX = screenPts.map(p => p.sx)
+      const SY = screenPts.map(p => p.sy)
+      const PAD = Math.max(80, 80 * zoom)
+      const x = Math.max(0, Math.min(...SX) - PAD)
+      const y = Math.max(0, Math.min(...SY) - PAD)
+      const w = Math.min(stage.width(), Math.max(...SX) + PAD) - x
+      const h = Math.min(stage.height(), Math.max(...SY) + PAD) - y
+
+      const url = stage.toDataURL({ pixelRatio: 3, x, y, width: w, height: h })
       if (url) {
         const a = document.createElement('a')
         a.href = url
@@ -74,7 +100,7 @@ export const FieldCanvas: React.FC = () => {
       }
     })
     return () => setExportPNG(null)
-  }, [plays, currentPlayId, setExportPNG])
+  }, [setExportPNG])
 
   // Registrar la grabación de video (mp4/webm) con el store
   useEffect(() => {
@@ -106,7 +132,7 @@ export const FieldCanvas: React.FC = () => {
       }
       useStore.getState().setIsPlaying(false)
       useStore.setState({ isExportingVideo: false })
-      if (result) downloadVideo(result.blob, cur.name, result.ext)
+      if (result) await shareOrDownloadVideo(result.blob, cur.name, result.ext)
     })
     return () => setExportVideo(null)
   }, [setExportVideo])

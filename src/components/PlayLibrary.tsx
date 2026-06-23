@@ -2,6 +2,8 @@ import React, { useState } from 'react'
 import { useStore } from '../store/useStore'
 import { PLAY_CATEGORIES } from '../types'
 import PlayMiniature from './PlayMiniature'
+import { buildShareUrl } from '../utils/share'
+import { downloadJson } from '../utils/export'
 
 export const PlayLibrary: React.FC = () => {
   const plays = useStore(s => s.plays)
@@ -308,6 +310,29 @@ export const PlayLibrary: React.FC = () => {
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: '4px' }}>
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      const url = buildShareUrl(play)
+                      if (typeof navigator.share === 'function') {
+                        try { await navigator.share({ title: play.name, url }); return } catch (err) {
+                          if ((err as Error).name === 'AbortError') return
+                        }
+                      }
+                      await navigator.clipboard.writeText(url).catch(() => {})
+                    }}
+                    style={actionButtonStyle}
+                    title="Compartir jugada (URL)"
+                  >
+                    🔗
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); downloadJson(play) }}
+                    style={actionButtonStyle}
+                    title="Guardar como archivo"
+                  >
+                    💾
+                  </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); duplicatePlay(play.id) }}
                     style={actionButtonStyle}

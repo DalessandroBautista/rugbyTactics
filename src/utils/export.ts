@@ -103,3 +103,23 @@ export function downloadVideo(blob: Blob, name: string, ext: string): void {
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+
+/**
+ * Intenta compartir el video con el Web Share API (nativo en móvil → WhatsApp, etc.).
+ * Si el navegador no soporta file sharing, descarga el archivo normalmente.
+ */
+export async function shareOrDownloadVideo(blob: Blob, name: string, ext: string): Promise<void> {
+  const safeName = name.replace(/[^a-z0-9]/gi, '_')
+  const file = new File([blob], `${safeName}.${ext}`, { type: blob.type })
+
+  if (typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: name })
+      return
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return // usuario canceló
+      // Otro error → fallback a descarga
+    }
+  }
+  downloadVideo(blob, name, ext)
+}

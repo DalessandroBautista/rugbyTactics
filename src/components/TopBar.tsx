@@ -1,5 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useStore } from '../store/useStore'
+import { useAuth } from '../store/useAuth'
+import { useServerSync } from '../hooks/useServerSync'
 import { EditMode } from '../types'
 import { APP_VERSION } from '../version'
 import { buildShareUrl } from '../utils/share'
@@ -25,7 +27,9 @@ const MODE_CONFIG: Record<EditMode, { label: string; icon: string; key: string; 
   },
 }
 
-export const TopBar: React.FC = () => {
+export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => {
+  const { user, logout } = useAuth()
+  const syncStatus = useServerSync()
   const editMode = useStore(s => s.editMode)
   const setEditMode = useStore(s => s.setEditMode)
   const isRecording = useStore(s => s.isRecording)
@@ -50,18 +54,44 @@ export const TopBar: React.FC = () => {
   const exportPNG = useStore(s => s.exportPNG)
 
   const [shared, setShared] = useState(false)
+  const plays = useStore(s => s.plays)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
+
+  // Muestra "Guardando…" → "✓ Guardado" cada vez que cambia el estado de jugadas.
+  useEffect(() => {
+    setSaveState('saving')
+    const t1 = setTimeout(() => {
+      setSaveState('saved')
+      const t2 = setTimeout(() => setSaveState('idle'), 1500)
+      return () => clearTimeout(t2)
+    }, 400) // 100ms después del debounce de persistencia
+    return () => clearTimeout(t1)
+  }, [plays])
 
   const handleShare = async () => {
     const state = useStore.getState()
     const play = state.plays.find(p => p.id === state.currentPlayId)
     if (!play) return
+    const url = buildShareUrl(play)
+
+    // Web Share API (móvil): abre el menú nativo → WhatsApp, Telegram, etc.
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: play.name, url })
+        setShared(true)
+        setTimeout(() => setShared(false), 2000)
+        return
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') return // usuario canceló
+      }
+    }
+
+    // Fallback escritorio: copiar al portapapeles
     try {
-      await navigator.clipboard.writeText(buildShareUrl(play))
+      await navigator.clipboard.writeText(url)
       setShared(true)
       setTimeout(() => setShared(false), 2000)
-    } catch {
-      // El portapapeles puede no estar disponible; sin acción
-    }
+    } catch { /* sin acción si el portapapeles no está disponible */ }
   }
 
   const handleModeChange = (mode: EditMode) => {
@@ -230,12 +260,30 @@ export const TopBar: React.FC = () => {
 
       <Divider />
 
+      {/* Save / sync indicator */}
+      {(saveState !== 'idle' || syncStatus === 'syncing') && (
+        <span style={{
+          fontSize: 11,
+          color: syncStatus === 'error' ? 'var(--red)' : saveState === 'saved' ? 'var(--green)' : 'var(--text-dim)',
+          whiteSpace: 'nowrap',
+          transition: 'color 0.2s',
+          flexShrink: 0,
+        }}>
+          {syncStatus === 'syncing' ? '↑ Sincronizando…'
+            : syncStatus === 'error' ? '⚠ Sin conexión'
+            : saveState === 'saving' ? 'Guardando…'
+            : '✓ Guardado'}
+        </span>
+      )}
+
+      <Divider />
+
       {/* Export */}
       <GhostBtn
         onClick={toggleLibrary}
         style={{ color: showLibrary ? 'var(--accent)' : undefined }}
-        title="Biblioteca de jugadas"
-      >Biblioteca</GhostBtn>
+        title="Ver todas mis jugadas guardadas"
+      >Mis jugadas</GhostBtn>
       <GhostBtn onClick={toggleExportDialog} title="Exportar / importar JSON">Exportar</GhostBtn>
       {exportPNG && <GhostBtn onClick={exportPNG} title="Descargar imagen PNG">PNG</GhostBtn>}
       <GhostBtn
@@ -260,6 +308,26 @@ export const TopBar: React.FC = () => {
         title="Reiniciar posiciones y trayectorias"
         style={{ ...dangerBtnBase, color: 'var(--red)' }}
       >Reiniciar</button>
+
+      <Divider />
+
+      {/* Usuario / Auth */}
+      {user ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: 'var(--green)', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            ● {user.username}
+          </span>
+          <button onClick={logout} style={{ ...dangerBtnBase, fontSize: 10 }} title="Cerrar sesión">Salir</button>
+        </div>
+      ) : (
+        <button
+          onClick={onShowAuth}
+          title="Iniciar sesión para sincronizar jugadas entre dispositivos"
+          style={{ ...ghostBase, color: 'var(--accent)', border: '1px solid rgba(79,158,255,0.4)', whiteSpace: 'nowrap' }}
+        >
+          Iniciar sesión
+        </button>
+      )}
 
     </header>
   )
