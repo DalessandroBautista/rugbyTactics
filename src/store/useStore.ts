@@ -97,6 +97,7 @@ interface PlayStore {
   requestFit: number
   loopPlayback: boolean
   presentationMode: boolean
+  halfField: boolean
   // Posiciones efímeras de la animación. No tocan `plays` (que conserva las
   // posiciones base), por lo que reproducir no muta ni re-renderiza todo el árbol.
   animatedPositions: Record<number, { x: number; y: number }> | null
@@ -153,6 +154,7 @@ interface PlayStore {
   fitCanvas: () => void
   toggleLoopPlayback: () => void
   togglePresentationMode: () => void
+  toggleHalfField: () => void
 
   loadFromJson: (json: string) => void
   exportToJson: () => string | null
@@ -238,6 +240,7 @@ export const useStore = create<PlayStore>((set, get) => {
     requestFit: 0,
     loopPlayback: false,
     presentationMode: false,
+    halfField: false,
     animatedPositions: null,
     animatedBall: null,
     history: [],
@@ -607,6 +610,7 @@ export const useStore = create<PlayStore>((set, get) => {
     toggleMultiSelect: () => set(state => ({ multiSelect: !state.multiSelect })),
     fitCanvas: () => set(state => ({ requestFit: state.requestFit + 1 })),
     toggleLoopPlayback: () => set(state => ({ loopPlayback: !state.loopPlayback })),
+    toggleHalfField: () => set(state => ({ halfField: !state.halfField, requestFit: state.requestFit + 1 })),
     togglePresentationMode: () => set(state => ({
       presentationMode: !state.presentationMode,
       // al entrar: salir de edición, deseleccionar, recentrar

@@ -56,6 +56,7 @@ export const FieldCanvas: React.FC = () => {
   const currentTime = useStore(s => s.currentTime)
   const animatedPositions = useStore(s => s.animatedPositions)
   const animatedBall = useStore(s => s.animatedBall)
+  const halfField = useStore(s => s.halfField)
 
   useAnimation()
   const { handleDrag, resetLastPoint } = useRecording()
@@ -166,15 +167,19 @@ export const FieldCanvas: React.FC = () => {
   // ── Fit to screen ──────────────────────────────────────────────────────────
   const fitToScreen = useCallback(() => {
     if (size.w === 0 || size.h === 0) return
-    const visW = FIELD_PX.totalLength
+    const visW = halfField ? FIELD_PX.halfway : FIELD_PX.totalLength
     const visH = FIELD_PX.width
     const z = Math.min((size.w - 20) / visW, (size.h - 20) / visH)
     minZoomRef.current = z
-    const cx = FIELD_PX.width / 2 + FIELD_PX.totalLength / 2
+    // En medio campo mostramos solo la mitad atacante (py = halfway..totalLength).
+    // Centro en coords de layer: layerX = centerPy + width/2, layerY = totalLength/2 - width/2
+    const cx = halfField
+      ? FIELD_PX.halfway * 1.5 + FIELD_PX.width / 2
+      : FIELD_PX.width / 2 + FIELD_PX.totalLength / 2
     const cy = FIELD_PX.totalLength / 2 - FIELD_PX.width / 2
     setPan(size.w / 2 - cx * z, size.h / 2 - cy * z)
     setZoom(z)
-  }, [size.w, size.h, setPan, setZoom])
+  }, [size.w, size.h, halfField, setPan, setZoom])
 
   useEffect(() => {
     const el = containerRef.current
@@ -495,7 +500,13 @@ export const FieldCanvas: React.FC = () => {
       >
         {/* Field layer */}
         <Layer x={view.panX} y={view.panY} scaleX={view.zoom} scaleY={view.zoom}>
-          <Group x={FIELD_PX.width / 2} y={FIELD_PX.totalLength / 2} rotation={-90}>
+          <Group
+            x={FIELD_PX.width / 2} y={FIELD_PX.totalLength / 2} rotation={-90}
+            {...(halfField ? {
+              clipX: 0, clipY: FIELD_PX.halfway,
+              clipWidth: FIELD_PX.width, clipHeight: FIELD_PX.halfway,
+            } : {})}
+          >
 
             {/* Marcas del campo (césped, líneas, postes, etiquetas) */}
             <FieldMarkings />

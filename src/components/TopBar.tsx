@@ -46,6 +46,8 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
   const toggleMultiSelect = useStore(s => s.toggleMultiSelect)
   const snapToGrid = useStore(s => s.snapToGrid)
   const toggleSnapToGrid = useStore(s => s.toggleSnapToGrid)
+  const halfField = useStore(s => s.halfField)
+  const toggleHalfField = useStore(s => s.toggleHalfField)
   const fitCanvas = useStore(s => s.fitCanvas)
   const history = useStore(s => s.history)
   const future = useStore(s => s.future)
@@ -251,6 +253,7 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
       {/* Toggles */}
       <ToggleBtn active={multiSelect} onClick={toggleMultiSelect} title="Selección múltiple — activá y hacé clic en jugadores, o arrastrá en el campo">Multi</ToggleBtn>
       <ToggleBtn active={snapToGrid} onClick={toggleSnapToGrid} title="Snap a grilla de 1 metro">Snap</ToggleBtn>
+      <ToggleBtn active={halfField} onClick={toggleHalfField} title="Mostrar solo la mitad atacante del campo">½ Cancha</ToggleBtn>
 
       <Divider />
 
