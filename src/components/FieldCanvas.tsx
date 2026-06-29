@@ -386,7 +386,7 @@ export const FieldCanvas: React.FC = () => {
     if (playerInteraction.current?.id === id) {
       playerInteraction.current.didDrag = true
     }
-    if (editMode === 'move') {
+    if (editMode === 'move' || editMode === 'select') {
       const state = useStore.getState()
       const currentPlay = state.plays.find(p => p.id === state.currentPlayId)
       if (!currentPlay) return
@@ -406,7 +406,7 @@ export const FieldCanvas: React.FC = () => {
         state.startRecording()
       }
       if (useStore.getState().isRecording) handleDrag(id, x, y)
-    } else if (state.editMode === 'move') {
+    } else if (state.editMode === 'move' || state.editMode === 'select') {
       const ctx = dragContext.current
       if (!ctx || ctx.draggedId !== id) return
       const snapped = snapPos(x, y, snapToGrid, snapSize)
@@ -441,7 +441,7 @@ export const FieldCanvas: React.FC = () => {
   const handlePlayerDragEnd = useCallback((id: number, x: number, y: number) => {
     const state = useStore.getState()
     const mode = state.editMode
-    if (mode === 'move') {
+    if (mode === 'move' || mode === 'select') {
       const ctx = dragContext.current
       const play = state.plays.find(p => p.id === state.currentPlayId)
       if (play && ctx && state.selectedPlayerIds.length > 1) {
@@ -503,8 +503,12 @@ export const FieldCanvas: React.FC = () => {
     return <div ref={containerRef} style={{ width: '100%', height: '100%', background: '#0d1117' }} />
   }
 
-  const isDraggable = editMode === 'move' || editMode === 'record'
-  const cursorStyle = editMode === 'select' ? 'default' : editMode === 'move' ? 'grab' : 'crosshair'
+  // En modo 'select', los jugadores YA seleccionados son arrastrables para mover el bloque.
+  // Los no seleccionados solo son clickeables (para seleccionar/deseleccionar).
+  const getIsDraggable = (playerId: number) =>
+    editMode === 'move' || editMode === 'record' ||
+    (editMode === 'select' && selectedPlayerIds.includes(playerId))
+  const cursorStyle = editMode === 'move' ? 'grab' : editMode === 'record' ? 'crosshair' : 'default'
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', background: '#0d1117', overflow: 'hidden', cursor: cursorStyle }}>
@@ -628,7 +632,7 @@ export const FieldCanvas: React.FC = () => {
                   isSelected={selectedPlayerIds.includes(player.id)}
                   isAway={player.team === 'away'}
                   isCarrier={play.ball.carriedBy === player.id}
-                  draggable={isDraggable}
+                  draggable={getIsDraggable(player.id)}
                   onMouseDown={(e) => handlePlayerMouseDown(e, player.id)}
                   onClick={(e) => handlePlayerClick(e, player.id)}
                   onTap={(e) => {
@@ -650,7 +654,7 @@ export const FieldCanvas: React.FC = () => {
               x={animatedBall?.x ?? play.ball.x}
               y={animatedBall?.y ?? play.ball.y}
               selected={selectedBall}
-              draggable={isDraggable}
+              draggable={editMode === 'move' || editMode === 'record'}
               onClick={handleBallClick}
               onTap={handleBallClick}
               onDragMove={handleBallDragMove}
