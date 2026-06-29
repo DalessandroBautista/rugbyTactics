@@ -114,8 +114,29 @@ export const FieldCanvas: React.FC = () => {
         console.warn('Este navegador no soporta grabación de video')
         return
       }
+
+      // Smart crop: calcular bounding box de todas las posiciones y trayectorias
+      // para exportar solo el área de acción, igual que el export PNG.
+      const { zoom, panX, panY } = st.view
+      const pts: Array<{ sx: number; sy: number }> = []
+      cur.players.forEach(p => {
+        pts.push(fieldToScreen(p.x, p.y, panX, panY, zoom))
+        p.trajectory.forEach(pt => pts.push(fieldToScreen(pt.x, pt.y, panX, panY, zoom)))
+      })
+      pts.push(fieldToScreen(cur.ball.x, cur.ball.y, panX, panY, zoom))
+      cur.ball.trajectory.forEach(pt => pts.push(fieldToScreen(pt.x, pt.y, panX, panY, zoom)))
+
+      const PAD = Math.max(80, 80 * zoom)
+      const cropX = Math.max(0, Math.min(...pts.map(p => p.sx)) - PAD)
+      const cropY = Math.max(0, Math.min(...pts.map(p => p.sy)) - PAD)
+      const cropMaxX = Math.min(stage.width(), Math.max(...pts.map(p => p.sx)) + PAD)
+      const cropMaxY = Math.min(stage.height(), Math.max(...pts.map(p => p.sy)) + PAD)
+      const cropW = Math.max(200, cropMaxX - cropX)
+      const cropH = Math.max(200, cropMaxY - cropY)
+      // 2x pixel ratio: números de jugadores y detalles visibles en el video
+      const PIXEL_RATIO = 2
+
       useStore.setState({ isExportingVideo: true })
-      // Reposicionar al inicio y arrancar la reproducción para grabar el movimiento
       st.setCurrentTime(0)
       st.setIsPlaying(false)
       await new Promise((r) => setTimeout(r, 80))
@@ -123,9 +144,9 @@ export const FieldCanvas: React.FC = () => {
       let result: { blob: Blob; ext: string } | null = null
       try {
         result = await recordStageVideo(
-          () => stage.toCanvas() as HTMLCanvasElement,
-          stage.width(),
-          stage.height(),
+          () => stage.toCanvas({ x: cropX, y: cropY, width: cropW, height: cropH, pixelRatio: PIXEL_RATIO }) as HTMLCanvasElement,
+          Math.round(cropW * PIXEL_RATIO),
+          Math.round(cropH * PIXEL_RATIO),
           cur.duration,
         )
       } catch (err) {

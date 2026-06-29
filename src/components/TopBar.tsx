@@ -56,6 +56,8 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
   const exportPNG = useStore(s => s.exportPNG)
 
   const [shared, setShared] = useState(false)
+  const [shareDialogUrl, setShareDialogUrl] = useState<string | null>(null)
+  const [urlCopied, setUrlCopied] = useState(false)
   const plays = useStore(s => s.plays)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
 
@@ -88,12 +90,17 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
       }
     }
 
-    // Fallback escritorio: copiar al portapapeles
+    // Escritorio: mostrar diálogo con la URL para copiar/compartir
+    setShareDialogUrl(url)
+  }
+
+  const handleCopyShareUrl = async () => {
+    if (!shareDialogUrl) return
     try {
-      await navigator.clipboard.writeText(url)
-      setShared(true)
-      setTimeout(() => setShared(false), 2000)
-    } catch { /* sin acción si el portapapeles no está disponible */ }
+      await navigator.clipboard.writeText(shareDialogUrl)
+      setUrlCopied(true)
+      setTimeout(() => setUrlCopied(false), 2000)
+    } catch { /* sin acción */ }
   }
 
   const handleModeChange = (mode: EditMode) => {
@@ -109,6 +116,7 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
   const activeCfg = MODE_CONFIG[editMode]
 
   return (
+    <>
     <header style={{
       display: 'flex',
       alignItems: 'center',
@@ -333,6 +341,83 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
       )}
 
     </header>
+
+    {/* Diálogo compartir por URL */}
+    {shareDialogUrl && (
+      <div
+        style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(0,0,0,0.6)',
+          zIndex: 2000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+        onClick={() => setShareDialogUrl(null)}
+      >
+        <div
+          style={{
+            background: '#1e1e32',
+            border: '1px solid #3a3a4e',
+            borderRadius: 12,
+            padding: 20,
+            width: 460,
+            maxWidth: '90vw',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+            fontFamily: 'sans-serif',
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>Compartir jugada</span>
+            <button
+              onClick={() => setShareDialogUrl(null)}
+              style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 18 }}
+            >✕</button>
+          </div>
+          <p style={{ margin: 0, fontSize: 12, color: '#aaa', lineHeight: 1.5 }}>
+            Este enlace contiene toda la jugada. Pegalo en el navegador para abrirla, o compartilo por WhatsApp / Telegram.
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              readOnly
+              value={shareDialogUrl}
+              onFocus={e => e.target.select()}
+              style={{
+                flex: 1,
+                background: '#0d1117',
+                border: '1px solid #3a3a4e',
+                borderRadius: 6,
+                color: '#aaa',
+                fontSize: 11,
+                padding: '6px 10px',
+                fontFamily: 'monospace',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            />
+            <button
+              onClick={handleCopyShareUrl}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 6,
+                background: urlCopied ? 'rgba(63,185,80,0.15)' : 'rgba(79,158,255,0.12)',
+                color: urlCopied ? 'var(--green)' : 'var(--accent)',
+                border: `1px solid ${urlCopied ? 'rgba(63,185,80,0.4)' : 'rgba(79,158,255,0.3)'}`,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.15s',
+              }}
+            >
+              {urlCopied ? '¡Copiado!' : 'Copiar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   )
 }
 
