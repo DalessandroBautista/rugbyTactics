@@ -1,4 +1,5 @@
 import { Play } from '../types'
+import { fixVideoForWhatsApp, ensureFFmpegLoaded } from './ffmpegFix'
 
 export function downloadJson(play: Play): void {
   const json = JSON.stringify(play, null, 2)
@@ -105,12 +106,32 @@ export function downloadVideo(blob: Blob, name: string, ext: string): void {
 }
 
 /**
+ * Toma el blob generado por MediaRecorder y lo re-procesa con FFmpeg.wasm para
+ * corregir timestamps no-monotónicos (DTS/PTS) que hacen que WhatsApp rechace el video.
+ * Si FFmpeg falla, devuelve el blob original (la corrección es un "mejor esfuerzo").
+ */
+async function fixVideoIfNeeded(blob: Blob, ext: string): Promise<Blob> {
+  // Solo re-procesamos MP4 (el problema de DTS no-monotónicos ocurre con mp4,
+  // no con webm que usa codecs más tolerantes)
+  if (ext !== 'mp4') return blob
+  try {
+    return await fixVideoForWhatsApp(blob, ext)
+  } catch (err) {
+    console.warn('FFmpeg fix no disponible, se usa el video original:', err)
+    return blob
+  }
+}
+
+/**
  * Intenta compartir el video con el Web Share API (nativo en móvil → WhatsApp, etc.).
  * Si el navegador no soporta file sharing, descarga el archivo normalmente.
  */
 export async function shareOrDownloadVideo(blob: Blob, name: string, ext: string): Promise<void> {
+  // Corregir timestamps antes de compartir (especialmente importante para WhatsApp)
+  const fixedBlob = await fixVideoIfNeeded(blob, ext)
+
   const safeName = name.replace(/[^a-z0-9]/gi, '_')
-  const file = new File([blob], `${safeName}.${ext}`, { type: blob.type })
+  const file = new File([fixedBlob], `${safeName}.${ext}`, { type: fixedBlob.type })
 
   if (typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
     try {
@@ -121,5 +142,5 @@ export async function shareOrDownloadVideo(blob: Blob, name: string, ext: string
       // Otro error → fallback a descarga
     }
   }
-  downloadVideo(blob, name, ext)
+  downloadVideo(fixedBlob, name, ext)
 }

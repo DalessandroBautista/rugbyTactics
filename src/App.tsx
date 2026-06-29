@@ -5,10 +5,18 @@ import { useAuth } from './store/useAuth'
 import { useKeyboard } from './hooks/useKeyboard'
 import { useServerSync } from './hooks/useServerSync'
 import { readSharedPlay, clearShareHash } from './utils/share'
+import { ensureFFmpegLoaded } from './utils/ffmpegFix'
 
 function App() {
   useKeyboard()
   useServerSync()
+
+  // Precargar FFmpeg.wasm en segundo plano para que esté listo al exportar video
+  useEffect(() => {
+    ensureFFmpegLoaded().catch(() => {
+      // FFmpeg no está disponible → la exportación usará el blob original sin fix
+    })
+  }, [])
 
   // Restaurar sesión si hay token guardado
   const checkAuth = useAuth(s => s.checkAuth)
