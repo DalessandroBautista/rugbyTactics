@@ -30,6 +30,42 @@ function clonePlays(plays: Play[]): Play[] {
     : JSON.parse(JSON.stringify(plays))
 }
 
+// Calcula las posiciones visuales (animatedPositions/animatedBall) y el
+// currentTime que corresponden al final del estado de una jugada restaurada.
+// Se usa en undo/redo para que los jugadores aparezcan donde deben estar.
+function restoredViewState(plays: Play[], currentPlayId: string | null): {
+  animatedPositions: Record<number, { x: number; y: number }> | null
+  animatedBall: { x: number; y: number } | null
+  currentTime: number
+} {
+  const play = plays.find(p => p.id === currentPlayId)
+  if (!play) return { animatedPositions: null, animatedBall: null, currentTime: 0 }
+
+  const pos: Record<number, { x: number; y: number }> = {}
+  let t = 0
+
+  for (const player of play.players) {
+    if (player.trajectory.length > 0) {
+      const last = player.trajectory[player.trajectory.length - 1]
+      pos[player.id] = { x: last.x, y: last.y }
+      t = Math.max(t, last.time)
+    }
+  }
+
+  let animatedBall: { x: number; y: number } | null = null
+  if (play.ball.trajectory.length > 0) {
+    const last = play.ball.trajectory[play.ball.trajectory.length - 1]
+    animatedBall = { x: last.x, y: last.y }
+    t = Math.max(t, last.time)
+  }
+
+  return {
+    animatedPositions: Object.keys(pos).length > 0 ? pos : null,
+    animatedBall,
+    currentTime: t,
+  }
+}
+
 function createInitialPlayers(): Player[] {
   return Array.from({ length: 15 }, (_, i) => {
     const number = i + 1
@@ -678,11 +714,13 @@ export const useStore = create<PlayStore>((set, get) => {
       if (state.history.length === 0) return
       const prev = state.history[state.history.length - 1]
       const currentSnapshot = clonePlays(state.plays)
+      const view = restoredViewState(prev, state.currentPlayId)
       set({
         plays: prev,
         history: state.history.slice(0, -1),
         future: [currentSnapshot, ...state.future.slice(0, 49)],
         isDirty: true,
+        ...view,
       })
       savePlays(prev)
     },
@@ -692,11 +730,13 @@ export const useStore = create<PlayStore>((set, get) => {
       if (state.future.length === 0) return
       const next = state.future[0]
       const currentSnapshot = clonePlays(state.plays)
+      const view = restoredViewState(next, state.currentPlayId)
       set({
         plays: next,
         history: [...state.history.slice(-49), currentSnapshot],
         future: state.future.slice(1),
         isDirty: true,
+        ...view,
       })
       savePlays(next)
     },
