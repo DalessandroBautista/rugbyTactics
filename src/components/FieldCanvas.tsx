@@ -166,6 +166,16 @@ export const FieldCanvas: React.FC = () => {
     initialPositions: Record<number, { x: number; y: number }>
   } | null>(null)
 
+  // Contexto para grabación en bloque: graba simultáneamente todos los jugadores seleccionados
+  const multiRecordRef = useRef<{
+    draggedId: number
+    startX: number
+    startY: number
+    lastX: number
+    lastY: number
+    initialPositions: Record<number, { x: number; y: number }>
+  } | null>(null)
+
   const isPanning = useRef(false)
   const lastPan = useRef({ x: 0, y: 0 })
   const hasMoved = useRef(false)
@@ -397,6 +407,23 @@ export const FieldCanvas: React.FC = () => {
       }
       dragContext.current = { draggedId: id, startX: x, startY: y, initialPositions }
     }
+    if (editMode === 'record') {
+      const state = useStore.getState()
+      if (state.selectedPlayerIds.length > 1) {
+        const play = state.plays.find(p => p.id === state.currentPlayId)
+        if (play) {
+          const initialPositions: Record<number, { x: number; y: number }> = {}
+          for (const pid of state.selectedPlayerIds) {
+            const p = play.players.find(pl => pl.id === pid)
+            if (p) {
+              const ap = state.animatedPositions?.[pid]
+              initialPositions[pid] = ap ? { x: ap.x, y: ap.y } : { x: p.x, y: p.y }
+            }
+          }
+          multiRecordRef.current = { draggedId: id, startX: x, startY: y, lastX: x, lastY: y, initialPositions }
+        }
+      }
+    }
   }, [editMode])
 
   const handlePlayerDragMove = useCallback((id: number, x: number, y: number) => {
@@ -405,7 +432,37 @@ export const FieldCanvas: React.FC = () => {
       if (!state.isRecording && (state.selectedPlayerIds.length > 0 || state.selectedBall)) {
         state.startRecording()
       }
-      if (useStore.getState().isRecording) handleDrag(id, x, y)
+      const st2 = useStore.getState()
+      if (st2.isRecording) {
+        handleDrag(id, x, y)
+        // Grabación en bloque: mover y grabar todos los jugadores seleccionados juntos
+        const ctx = multiRecordRef.current
+        if (ctx && ctx.draggedId === id) {
+          const dist = Math.sqrt((x - ctx.lastX) ** 2 + (y - ctx.lastY) ** 2)
+          if (dist >= 3) {
+            ctx.lastX = x
+            ctx.lastY = y
+            const totalDx = x - ctx.startX
+            const totalDy = y - ctx.startY
+            const newAnimPos: Record<number, { x: number; y: number }> = {}
+            for (const pid of st2.selectedPlayerIds) {
+              if (pid === id) continue
+              const init = ctx.initialPositions[pid]
+              if (init) {
+                const nx = init.x + totalDx
+                const ny = init.y + totalDy
+                st2.addRecordingPoint(pid, nx, ny)
+                newAnimPos[pid] = { x: nx, y: ny }
+              }
+            }
+            if (Object.keys(newAnimPos).length > 0) {
+              useStore.setState(s => ({
+                animatedPositions: { ...(s.animatedPositions ?? {}), ...newAnimPos },
+              }))
+            }
+          }
+        }
+      }
     } else if (state.editMode === 'move' || state.editMode === 'select') {
       const ctx = dragContext.current
       if (!ctx || ctx.draggedId !== id) return
@@ -478,6 +535,18 @@ export const FieldCanvas: React.FC = () => {
     }
     if (mode === 'record' && state.isRecording) {
       handleDrag(id, x, y)
+      const ctx = multiRecordRef.current
+      if (ctx && ctx.draggedId === id) {
+        const totalDx = x - ctx.startX
+        const totalDy = y - ctx.startY
+        for (const pid of state.selectedPlayerIds) {
+          if (pid === id) continue
+          const init = ctx.initialPositions[pid]
+          if (init) state.addRecordingPoint(pid, init.x + totalDx, init.y + totalDy)
+        }
+        multiRecordRef.current = null
+      }
+      // finishRecording actualiza animatedPositions internamente (merge con previas)
       state.finishRecording()
     }
     dragContext.current = null

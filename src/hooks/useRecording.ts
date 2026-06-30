@@ -31,7 +31,10 @@ export function useRecording() {
   }, [handleKeyDown])
 
   const handleDrag = useCallback((id: number, x: number, y: number) => {
-    if (!isRecording) return
+    // Leer isRecording directo del store para evitar el problema del closure
+    // desactualizado cuando startRecording() y handleDrag() se llaman en el
+    // mismo tick (antes de que React re-renderice y actualice el closure).
+    if (!useStore.getState().isRecording) return
 
     if (lastPointRef.current) {
       const dx = x - lastPointRef.current.x
@@ -41,7 +44,7 @@ export function useRecording() {
 
     lastPointRef.current = { x, y }
     addRecordingPoint(id, x, y)
-  }, [isRecording, addRecordingPoint])
+  }, [addRecordingPoint])
 
   const resetLastPoint = useCallback(() => {
     lastPointRef.current = null

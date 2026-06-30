@@ -502,13 +502,20 @@ export const useStore = create<PlayStore>((set, get) => {
       let maxDuration = play.duration
       let newCurrentTime = timeOffset
 
+      // Posiciones finales de cada jugador/pelota grabados, para mantenerlos
+      // visualmente en su posición de destino después de terminar la grabación.
+      const finalAnimPos: Record<number, { x: number; y: number }> = {}
+      let finalAnimBall: { x: number; y: number } | null = state.animatedBall
+
       for (const movement of state.recordedMovements) {
         if (movement.points.length < 2) continue
-        const lastTime = movement.points[movement.points.length - 1].time
+        const lastPoint = movement.points[movement.points.length - 1]
+        const lastTime = lastPoint.time
         maxDuration = Math.max(maxDuration, lastTime)
         newCurrentTime = Math.max(newCurrentTime, lastTime)
 
         if (movement.playerId === -1) {
+          finalAnimBall = { x: lastPoint.x, y: lastPoint.y }
           newPlays = newPlays.map(p => {
             if (p.id !== state.currentPlayId) return p
             // Conservar puntos anteriores al offset y agregar los nuevos encadenados.
@@ -516,6 +523,7 @@ export const useStore = create<PlayStore>((set, get) => {
             return { ...p, ball: { ...p.ball, trajectory: [...before, ...movement.points] } }
           })
         } else {
+          finalAnimPos[movement.playerId] = { x: lastPoint.x, y: lastPoint.y }
           newPlays = newPlays.map(p => {
             if (p.id !== state.currentPlayId) return p
             const newPlayers = p.players.map(pl => {
@@ -533,6 +541,12 @@ export const useStore = create<PlayStore>((set, get) => {
         p.id === state.currentPlayId ? { ...p, duration: maxDuration } : p
       )
 
+      // Hacer merge de las posiciones finales con las previas para que los
+      // jugadores grabados anteriormente no reviertan a su posición base.
+      const mergedAnimPos = Object.keys(finalAnimPos).length > 0
+        ? { ...(state.animatedPositions ?? {}), ...finalAnimPos }
+        : state.animatedPositions
+
       set({
         plays: newPlays,
         isRecording: false,
@@ -541,6 +555,8 @@ export const useStore = create<PlayStore>((set, get) => {
         recordedMovements: [],
         isDirty: true,
         currentTime: newCurrentTime,
+        animatedPositions: mergedAnimPos,
+        animatedBall: finalAnimBall,
       })
       savePlays(newPlays)
     },
