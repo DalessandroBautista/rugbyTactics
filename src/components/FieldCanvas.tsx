@@ -365,7 +365,10 @@ export const FieldCanvas: React.FC = () => {
           const rb = rubberBandRect
           const ids = currentPlay.players
             .filter(player => {
-              const { sx, sy } = fieldToScreen(player.x, player.y, state.view.panX, state.view.panY, state.view.zoom)
+              const ap = state.animatedPositions?.[player.id]
+              const fx = ap?.x ?? player.x
+              const fy = ap?.y ?? player.y
+              const { sx, sy } = fieldToScreen(fx, fy, state.view.panX, state.view.panY, state.view.zoom)
               return sx >= rb.x && sx <= rb.x + rb.w && sy >= rb.y && sy <= rb.y + rb.h
             })
             .map(p => p.id)
