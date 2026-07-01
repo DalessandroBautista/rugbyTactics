@@ -35,6 +35,7 @@ export interface Play {
   tags?: string[]
   zones?: TacticalZone[]
   overlayImage?: OverlayImage
+  speechBubbles?: SpeechBubble[]
 }
 
 export type ZoneShape = 'rect' | 'circle' | 'arrow'
@@ -57,6 +58,17 @@ export interface OverlayImage {
   width: number
   height: number
   opacity: number
+}
+
+export interface SpeechBubble {
+  id: string
+  text: string
+  x: number
+  y: number
+  startTime: number  // segundo de la jugada en que aparece (ms)
+  duration: number   // cuánto dura visible (ms)
+  color?: string
+  textColor?: string
 }
 
 export interface PlayTemplate {

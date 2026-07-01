@@ -9,6 +9,7 @@ import { FormationDialog } from './FormationDialog'
 import { PresentationBar } from './PresentationBar'
 import { WelcomeOverlay } from './WelcomeOverlay'
 import { AuthModal } from './AuthModal'
+import { HelpDialog } from './HelpDialog'
 import { useStore } from '../store/useStore'
 
 export const Layout: React.FC = () => {
@@ -93,6 +94,7 @@ export const Layout: React.FC = () => {
           onClose={() => useStore.getState().setShowFormation(null)}
         />
       )}
+      <HelpDialog />
       {isExportingVideo && (
         <div style={{
           position: 'fixed',

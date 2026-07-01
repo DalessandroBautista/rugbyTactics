@@ -31,6 +31,15 @@ function App() {
     }
   }, [])
 
+  // Primera visita: mostrar ayuda automáticamente
+  useEffect(() => {
+    const seen = localStorage.getItem('tr_help_seen')
+    if (!seen) {
+      useStore.getState().setShowHelp(true)
+      localStorage.setItem('tr_help_seen', '1')
+    }
+  }, [])
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {

@@ -14,6 +14,7 @@ import {
   SCALE,
   TacticalZone,
   OverlayImage,
+  SpeechBubble,
 } from '../types'
 import { loadPlays, savePlays, loadCurrentPlayId, saveCurrentPlayId } from '../utils/persistence'
 import { getInterpolatedPosition } from '../utils/interpolation'
@@ -128,6 +129,7 @@ interface PlayStore {
   showExportDialog: boolean
   showLibrary: boolean
   showFormation: 'lineout' | 'scrum' | null
+  showHelp: boolean
   isDirty: boolean
   multiSelect: boolean
   requestFit: number
@@ -186,6 +188,7 @@ interface PlayStore {
   toggleExportDialog: () => void
   toggleLibrary: () => void
   setShowFormation: (type: 'lineout' | 'scrum' | null) => void
+  setShowHelp: (show: boolean) => void
   toggleMultiSelect: () => void
   fitCanvas: () => void
   toggleLoopPlayback: () => void
@@ -227,6 +230,11 @@ interface PlayStore {
   reorderPlays: (fromIndex: number, toIndex: number) => void
 
   setPlaysFromServer: (plays: Play[]) => void
+
+  // Burbujas de diálogo — persisten en la jugada actual
+  addSpeechBubble: (bubble: Omit<SpeechBubble, 'id'>) => void
+  removeSpeechBubble: (id: string) => void
+  clearSpeechBubbles: () => void
 }
 
 export const useStore = create<PlayStore>((set, get) => {
@@ -271,6 +279,7 @@ export const useStore = create<PlayStore>((set, get) => {
     showExportDialog: false,
     showLibrary: false,
     showFormation: null,
+    showHelp: false,
     isDirty: false,
     multiSelect: false,
     requestFit: 0,
@@ -659,6 +668,7 @@ export const useStore = create<PlayStore>((set, get) => {
     toggleExportDialog: () => set(state => ({ showExportDialog: !state.showExportDialog })),
     toggleLibrary: () => set(state => ({ showLibrary: !state.showLibrary })),
     setShowFormation: (type) => set({ showFormation: type }),
+    setShowHelp: (show) => set({ showHelp: show }),
     toggleMultiSelect: () => set(state => ({ multiSelect: !state.multiSelect })),
     fitCanvas: () => set(state => ({ requestFit: state.requestFit + 1 })),
     toggleLoopPlayback: () => set(state => ({ loopPlayback: !state.loopPlayback })),
@@ -840,6 +850,26 @@ export const useStore = create<PlayStore>((set, get) => {
       const merged = [...serverPlays, ...localOnly]
       set({ plays: merged })
       savePlays(merged)
+    },
+
+    // Burbujas de diálogo — se guardan dentro de la jugada actual
+    addSpeechBubble: (bubble) => {
+      const newBubble: SpeechBubble = { ...bubble, id: generateId() }
+      updateCurrentPlay(play => ({
+        ...play,
+        speechBubbles: [...(play.speechBubbles ?? []), newBubble],
+      }))
+    },
+
+    removeSpeechBubble: (id) => {
+      updateCurrentPlay(play => ({
+        ...play,
+        speechBubbles: (play.speechBubbles ?? []).filter(b => b.id !== id),
+      }))
+    },
+
+    clearSpeechBubbles: () => {
+      updateCurrentPlay(play => ({ ...play, speechBubbles: [] }))
     },
   }
 })

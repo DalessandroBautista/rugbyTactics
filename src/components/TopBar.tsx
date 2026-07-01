@@ -5,6 +5,7 @@ import { useServerSync } from '../hooks/useServerSync'
 import { EditMode } from '../types'
 import { APP_VERSION } from '../version'
 import { buildShareUrl } from '../utils/share'
+import { SpeechBubbleInput } from './SpeechBubbleInput'
 
 const MODE_CONFIG: Record<EditMode, { label: string; icon: string; key: string; color: string; bg: string; border: string }> = {
   select: {
@@ -54,6 +55,7 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
   const undo = useStore(s => s.undo)
   const redo = useStore(s => s.redo)
   const exportPNG = useStore(s => s.exportPNG)
+  const setShowHelp = useStore(s => s.setShowHelp)
 
   const [shared, setShared] = useState(false)
   const [shareDialogUrl, setShareDialogUrl] = useState<string | null>(null)
@@ -271,6 +273,9 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
 
       <Divider />
 
+      {/* Speech Bubbles */}
+      <SpeechBubbleInput />
+
       {/* Save / sync indicator */}
       {(saveState !== 'idle' || syncStatus === 'syncing') && (
         <span style={{
@@ -323,6 +328,12 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
       <Divider />
 
       {/* Usuario / Auth */}
+      <GhostBtn
+        onClick={() => setShowHelp(true)}
+        title="Ayuda y atajos de teclado (?)"
+        style={{ fontSize: 13, padding: '4px 7px' }}
+      >?</GhostBtn>
+
       {user ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           <span style={{ fontSize: 11, color: 'var(--green)', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

@@ -12,6 +12,7 @@ import { FieldMarkings } from './FieldMarkings'
 import { PlayerToken } from './PlayerToken'
 import { BallToken } from './BallToken'
 import { MovementTrail } from './MovementTrail'
+import { SpeechBubble } from './SpeechBubble'
 
 // Convierte coordenadas de campo a coordenadas de pantalla (para el rubber-band).
 // Replica la transformación del Group contenedor: traslación al centro del
@@ -136,6 +137,19 @@ export const FieldCanvas: React.FC = () => {
       // 2x pixel ratio: números de jugadores y detalles visibles en el video
       const PIXEL_RATIO = 2
 
+      // Calcular duración real: último movimiento + 2 segundos de buffer
+      let lastMoveTime = 0
+      for (const p of cur.players) {
+        for (const pt of p.trajectory) {
+          if (pt.time > lastMoveTime) lastMoveTime = pt.time
+        }
+      }
+      for (const pt of cur.ball.trajectory) {
+        if (pt.time > lastMoveTime) lastMoveTime = pt.time
+      }
+      // Mínimo 2 segundos, máximo cur.duration
+      const recDuration = Math.min(cur.duration, Math.max(2000, lastMoveTime + 2000))
+
       useStore.setState({ isExportingVideo: true })
       st.setCurrentTime(0)
       st.setIsPlaying(false)
@@ -147,7 +161,7 @@ export const FieldCanvas: React.FC = () => {
           () => stage.toCanvas({ x: cropX, y: cropY, width: cropW, height: cropH, pixelRatio: PIXEL_RATIO }) as HTMLCanvasElement,
           Math.round(cropW * PIXEL_RATIO),
           Math.round(cropH * PIXEL_RATIO),
-          cur.duration,
+          recDuration,
         )
       } catch (err) {
         console.error('Fallo al grabar el video:', err)
@@ -325,10 +339,19 @@ export const FieldCanvas: React.FC = () => {
     if (e.target !== stage) return  // shape clicked — its own handlers run
 
     const state = useStore.getState()
-    if (state.editMode === 'select') {
+    const evt = e.evt as MouseEvent
+
+    // Shift + click izquierdo en modo select → banda de goma (selección múltiple)
+    // Middle click → siempre paneo
+    const wantsRubberBand = state.editMode === 'select' && evt?.shiftKey
+    const wantsPan = !wantsRubberBand  // todo lo demás es paneo
+
+    if (wantsRubberBand) {
       rubberBandStart.current = { x: pos.x, y: pos.y }
       setRubberBandRect({ x: pos.x, y: pos.y, w: 0, h: 0 })
-    } else {
+    }
+
+    if (wantsPan) {
       isPanning.current = true
       lastPan.current = { x: pos.x, y: pos.y }
     }
@@ -580,7 +603,8 @@ export const FieldCanvas: React.FC = () => {
   const getIsDraggable = (playerId: number) =>
     editMode === 'move' || editMode === 'record' ||
     (editMode === 'select' && selectedPlayerIds.includes(playerId))
-  const cursorStyle = editMode === 'move' ? 'grab' : editMode === 'record' ? 'crosshair' : 'default'
+  // Cursor: grab en todos los modos (siempre se puede panear), crosshair solo en grabación
+  const cursorStyle = editMode === 'record' ? 'crosshair' : 'grab'
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', background: '#0d1117', overflow: 'hidden', cursor: cursorStyle }}>
@@ -732,6 +756,14 @@ export const FieldCanvas: React.FC = () => {
               onDragMove={handleBallDragMove}
               onDragEnd={handleBallDragEnd}
             />
+
+            {/* Burbujas de diálogo — siempre visibles en edición, por tiempo en playback */}
+            {(play.speechBubbles ?? []).map(bubble => {
+              const visible = !isPlaying || (currentTime >= bubble.startTime && currentTime < bubble.startTime + bubble.duration)
+              return (
+                <SpeechBubble key={bubble.id} bubble={bubble} visible={visible} />
+              )
+            })}
 
           </Group>
         </Layer>

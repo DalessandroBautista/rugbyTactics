@@ -101,6 +101,11 @@ export function useKeyboard() {
           e.preventDefault()
           state.fitCanvas()
           break
+
+        case '?':
+          e.preventDefault()
+          state.setShowHelp(true)
+          break
       }
     }
 
