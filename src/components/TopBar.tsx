@@ -59,6 +59,14 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
   const exportPNG = useStore(s => s.exportPNG)
   const setShowHelp = useStore(s => s.setShowHelp)
 
+  // Modo compacto: en pantallas angostas se oculta el texto de marca
+  const [narrow, setNarrow] = useState(window.innerWidth < 1500)
+  useEffect(() => {
+    const onResize = () => setNarrow(window.innerWidth < 1500)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
   const [shared, setShared] = useState(false)
   const [shareDialogUrl, setShareDialogUrl] = useState<string | null>(null)
   const [urlCopied, setUrlCopied] = useState(false)
@@ -124,8 +132,8 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
     <header style={{
       display: 'flex',
       alignItems: 'center',
-      gap: 4,
-      padding: '0 10px',
+      gap: 3,
+      padding: '0 8px',
       background: 'var(--panel)',
       height: 'var(--topbar-h)',
       flexShrink: 0,
@@ -145,7 +153,7 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
           transition: 'background 0.25s',
           flexShrink: 0,
         }}>TR</div>
-        <div>
+        {!narrow && <div>
           <div style={{
             fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16,
             color: 'var(--text)', letterSpacing: '0.8px', lineHeight: 1.1,
@@ -156,7 +164,7 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
           <div style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'monospace', lineHeight: 1 }}>
             v{APP_VERSION}
           </div>
-        </div>
+        </div>}
       </div>
 
       <Divider />
@@ -194,14 +202,16 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
             >
               <span style={{ fontSize: 10, opacity: isActive ? 1 : 0.45 }}>{cfg.icon}</span>
               {cfg.label}
-              <kbd style={{
-                fontSize: 9, fontFamily: 'monospace',
-                padding: '1px 4px', borderRadius: 3,
-                background: isActive ? 'rgba(0,0,0,0.18)' : 'transparent',
-                color: isActive ? cfg.color : 'var(--text-dim)',
-                letterSpacing: '0.3px',
-                border: isActive ? `1px solid ${cfg.border}` : '1px solid transparent',
-              }}>{cfg.key}</kbd>
+              {isActive && (
+                <kbd style={{
+                  fontSize: 9, fontFamily: 'monospace',
+                  padding: '1px 4px', borderRadius: 3,
+                  background: 'rgba(0,0,0,0.18)',
+                  color: cfg.color,
+                  letterSpacing: '0.3px',
+                  border: `1px solid ${cfg.border}`,
+                }}>{cfg.key}</kbd>
+              )}
             </button>
           )
         })}
@@ -276,61 +286,72 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
 
       {/* View */}
       <GhostBtn onClick={fitCanvas} title="Centrar campo — tecla F">Centrar</GhostBtn>
-      <GhostBtn onClick={() => { if (currentPlayId) useStore.getState().mirrorPlay(currentPlayId) }} title="Espejo horizontal de la jugada">Espejo</GhostBtn>
 
       <Divider />
 
       {/* Speech Bubbles */}
       <SpeechBubbleInput />
 
-      {/* Save / sync indicator */}
-      {(saveState !== 'idle' || syncStatus === 'syncing') && (
-        <span style={{
-          fontSize: 11,
-          color: syncStatus === 'error' ? 'var(--red)' : saveState === 'saved' ? 'var(--green)' : 'var(--text-dim)',
-          whiteSpace: 'nowrap',
-          transition: 'color 0.2s',
-          flexShrink: 0,
-        }}>
-          {syncStatus === 'syncing' ? '↑ Sincronizando…'
-            : syncStatus === 'error' ? '⚠ Sin conexión'
-            : saveState === 'saving' ? 'Guardando…'
-            : '✓ Guardado'}
-        </span>
-      )}
+      {/* Save / sync indicator — ancho reservado para no mover la barra */}
+      <span style={{
+        fontSize: 11,
+        minWidth: 80,
+        textAlign: 'right',
+        color: syncStatus === 'error' ? 'var(--red)' : saveState === 'saved' ? 'var(--green)' : 'var(--text-dim)',
+        whiteSpace: 'nowrap',
+        transition: 'color 0.2s',
+        flexShrink: 0,
+      }}>
+        {syncStatus === 'syncing' ? '↑ Sincronizando…'
+          : syncStatus === 'error' ? '⚠ Sin conexión'
+          : saveState === 'saving' ? 'Guardando…'
+          : saveState === 'saved' ? '✓ Guardado'
+          : ''}
+      </span>
 
       <Divider />
 
-      {/* Export */}
+      {/* Biblioteca + menú de salida */}
       <GhostBtn
         onClick={toggleLibrary}
         style={{ color: showLibrary ? 'var(--accent)' : undefined }}
         title="Ver todas mis jugadas guardadas"
-      >Mis jugadas</GhostBtn>
-      <GhostBtn onClick={toggleExportDialog} title="Exportar / importar JSON">Exportar</GhostBtn>
-      {exportPNG && <GhostBtn onClick={exportPNG} title="Descargar imagen PNG">PNG</GhostBtn>}
-      <GhostBtn
-        onClick={handleShare}
-        style={{ color: shared ? 'var(--green)' : undefined }}
-        title="Copiar enlace para compartir la jugada (sin servidor)"
-      >{shared ? '¡Copiado!' : 'Compartir'}</GhostBtn>
-
-      <Divider />
-
-      {/* Danger — de-emphasized */}
-      <button
-        onClick={() => { if (currentPlayId) useStore.getState().resetMovements(currentPlayId) }}
-        title="Borrar todas las trayectorias"
-        style={{ ...dangerBtnBase, color: 'var(--text-muted)' }}
-      >Borrar rutas</button>
-      <button
-        onClick={() => {
-          if (currentPlayId && confirm('¿Reiniciar la jugada completa?'))
-            useStore.getState().resetPlay(currentPlayId)
-        }}
-        title="Reiniciar posiciones y trayectorias"
-        style={{ ...dangerBtnBase, color: 'var(--red)' }}
-      >Reiniciar</button>
+      >Jugadas</GhostBtn>
+      <DropMenu
+        label={shared ? '¡Enlace copiado!' : 'Compartir'}
+        title="Compartir y exportar la jugada"
+        highlight={shared}
+        items={[
+          { label: 'Copiar enlace', title: 'El enlace contiene toda la jugada — no necesita servidor', onClick: handleShare },
+          ...(exportPNG ? [{ label: 'Descargar imagen PNG', onClick: exportPNG }] : []),
+          { label: 'Exportar / importar JSON', onClick: toggleExportDialog },
+        ]}
+      />
+      <DropMenu
+        label="⋯"
+        title="Más acciones"
+        items={[
+          {
+            label: 'Espejar jugada',
+            title: 'Refleja horizontalmente posiciones y rutas',
+            onClick: () => { if (currentPlayId) useStore.getState().mirrorPlay(currentPlayId) },
+          },
+          {
+            label: 'Borrar rutas de movimiento',
+            title: 'Elimina todas las trayectorias grabadas; los jugadores quedan donde están',
+            onClick: () => { if (currentPlayId) useStore.getState().resetMovements(currentPlayId) },
+          },
+          {
+            label: 'Reiniciar jugada…',
+            title: 'Vuelve posiciones y rutas al estado inicial',
+            danger: true,
+            onClick: () => {
+              if (currentPlayId && confirm('¿Reiniciar la jugada completa?'))
+                useStore.getState().resetPlay(currentPlayId)
+            },
+          },
+        ]}
+      />
 
       <Divider />
 
@@ -441,8 +462,74 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
+interface DropMenuItem {
+  label: string
+  title?: string
+  danger?: boolean
+  onClick: () => void
+}
+
+/** Botón que despliega un menú anclado debajo; cierra al elegir o al hacer
+ *  clic afuera (overlay fijo transparente). */
+const DropMenu: React.FC<{
+  label: React.ReactNode
+  title?: string
+  highlight?: boolean
+  items: DropMenuItem[]
+}> = ({ label, title, highlight, items }) => {
+  const [open, setOpen] = useState(false)
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        title={title}
+        style={{
+          ...ghostBase,
+          background: open ? 'var(--panel-hover)' : 'transparent',
+          color: highlight ? 'var(--green)' : open ? 'var(--text)' : 'var(--text-muted)',
+        }}
+      >{label}</button>
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 1500 }} onClick={() => setOpen(false)} />
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 1501,
+            minWidth: 200,
+            background: 'var(--panel-alt)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-md)',
+            padding: 4,
+            boxShadow: '0 10px 28px rgba(0,0,0,0.5)',
+            animation: 'fadeIn 0.12s ease',
+          }}>
+            {items.map((item, i) => (
+              <button
+                key={i}
+                title={item.title}
+                onClick={() => { setOpen(false); item.onClick() }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--panel-hover)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '8px 10px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'transparent',
+                  color: item.danger ? 'var(--red)' : 'var(--text)',
+                  fontSize: 12,
+                  border: 'none',
+                  whiteSpace: 'nowrap',
+                }}
+              >{item.label}</button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 const Divider: React.FC = () => (
-  <div style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 3px', flexShrink: 0 }} />
+  <div style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 2px', flexShrink: 0 }} />
 )
 
 const GhostBtn: React.FC<{
@@ -484,7 +571,7 @@ const IconBtn: React.FC<{
 )
 
 const ghostBase: React.CSSProperties = {
-  padding: '4px 9px',
+  padding: '4px 8px',
   borderRadius: 'var(--radius-md)',
   background: 'transparent',
   color: 'var(--text-muted)',

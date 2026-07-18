@@ -1,0 +1,7 @@
+[     711ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:5199/node_modules/.vite/deps/chunk-TWZIM7X7.js?v=a68b41c5:21149
+[     949ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5199/favicon.ico:0
+[   37434ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:5199/node_modules/.vite/deps/chunk-TWZIM7X7.js?v=a68b41c5:21149
+[   71171ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:5199/node_modules/.vite/deps/chunk-TWZIM7X7.js?v=a68b41c5:21149
+[   84780ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:5199/src/components/TopBar.tsx?t=1784336836338:0
+[   84781ms] [ERROR] [vite] Failed to reload /src/components/TopBar.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://localhost:5199/node_modules/.vite/deps/react-konva.js?v=a68b41c5:27407
+[  107057ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:5199/node_modules/.vite/deps/chunk-TWZIM7X7.js?v=a68b41c5:21149
