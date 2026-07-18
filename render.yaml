@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: tactics-rugby
+    name: rugby-tactics
     runtime: node
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm start

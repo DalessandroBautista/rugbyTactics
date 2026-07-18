@@ -1,7 +1,9 @@
 import { Play } from '../types'
 
-const STORAGE_KEY = 'tactics-rugby-plays'
-const CURRENT_PLAY_KEY = 'tactics-rugby-current-play'
+const STORAGE_KEY = 'rugby-tactics-plays'
+const CURRENT_PLAY_KEY = 'rugby-tactics-current-play'
+const LEGACY_STORAGE_KEY = 'tactics-rugby-plays'
+const LEGACY_CURRENT_PLAY_KEY = 'tactics-rugby-current-play'
 const SAVE_DEBOUNCE_MS = 300
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -68,7 +70,11 @@ if (typeof window !== 'undefined') {
 
 export function loadPlays(): Play[] {
   try {
-    const data = localStorage.getItem(STORAGE_KEY)
+    let data = localStorage.getItem(STORAGE_KEY)
+    if (data === null) {
+      data = localStorage.getItem(LEGACY_STORAGE_KEY)
+      if (data !== null) localStorage.setItem(STORAGE_KEY, data)
+    }
     return data ? JSON.parse(data) : []
   } catch {
     return []
@@ -86,7 +92,12 @@ export function saveCurrentPlayId(id: string): void {
 
 export function loadCurrentPlayId(): string | null {
   try {
-    return localStorage.getItem(CURRENT_PLAY_KEY)
+    let id = localStorage.getItem(CURRENT_PLAY_KEY)
+    if (id === null) {
+      id = localStorage.getItem(LEGACY_CURRENT_PLAY_KEY)
+      if (id !== null) localStorage.setItem(CURRENT_PLAY_KEY, id)
+    }
+    return id
   } catch {
     return null
   }

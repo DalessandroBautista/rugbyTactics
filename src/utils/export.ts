@@ -24,7 +24,7 @@ export function downloadCsv(plays: Play[]): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = 'tactics-rugby-plays.csv'
+  a.download = 'rugby-tactics-plays.csv'
   a.click()
   URL.revokeObjectURL(url)
 }

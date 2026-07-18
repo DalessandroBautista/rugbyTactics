@@ -5,7 +5,7 @@ type Tab = 'como' | 'mouse' | 'teclado' | 'cantos'
 
 const SECTIONS: Record<Tab, { title: string; items: Array<{ label: string; desc: string }> }> = {
   como: {
-    title: 'Cómo usar TacticsRugby',
+    title: 'Cómo usar RugbyTactics',
     items: [
       { label: '1. Armá tu jugada', desc: 'Elegí un modo (Seleccionar / Mover / Grabar) y ubicá a los 15 jugadores en el campo.' },
       { label: '2. Dibujá las rutas', desc: 'En modo Grabar, seleccioná jugadores y arrastralos para grabar sus movimientos en tiempo real.' },
@@ -102,7 +102,7 @@ export const HelpDialog: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 16 }}>🏉</span>
             <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>
-              Ayuda de TacticsRugby
+              Ayuda de RugbyTactics
             </span>
           </div>
           <button

@@ -33,7 +33,7 @@ export const WelcomeOverlay: React.FC = () => {
         <div style={styles.brandRow}>
           <div style={styles.logo}>TR</div>
           <div>
-            <h1 style={styles.h1}>TacticsRugby</h1>
+            <h1 style={styles.h1}>RugbyTactics</h1>
             <p style={styles.tagline}>Diseñá, animá y compartí jugadas como en una pizarra táctica.</p>
           </div>
         </div>

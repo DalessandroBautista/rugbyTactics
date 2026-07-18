@@ -179,7 +179,7 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
             color: 'var(--text)', letterSpacing: '0.8px', lineHeight: 1.1,
             textTransform: 'uppercase',
           }}>
-            TacticsRugby
+            RugbyTactics
           </div>
           <div style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'monospace', lineHeight: 1 }}>
             v{APP_VERSION}

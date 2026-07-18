@@ -1,4 +1,4 @@
-# Mejoras propuestas — TacticsRugby
+# Mejoras propuestas — RugbyTactics
 
 Análisis posterior al rediseño del campo, modo presentación y onboarding.
 Ordenado por relación impacto / esfuerzo. Marcado: ✅ hecho · 🔜 propuesto.

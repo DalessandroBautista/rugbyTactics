@@ -1,4 +1,4 @@
-# TacticsRugby — Product Context
+# RugbyTactics — Product Context
 
 ## Product Purpose
 Web app for rugby coaches and analysts to design, animate, and share tactical plays. Users place players on a regulation field, draw movement trajectories, and replay animations to communicate plays to their team.
@@ -12,7 +12,7 @@ Web app for rugby coaches and analysts to design, animate, and share tactical pl
 product
 
 ## Brand
-- Name: TacticsRugby
+- Name: RugbyTactics
 - Tone: focused, professional, no-nonsense — like a tactical whiteboard, not a game
 - Anti-references: sports gaming apps (too flashy), SaaS dashboards (too corporate), Google Docs (too office)
 - The tool should feel like a specialist instrument: purposeful, dense but readable

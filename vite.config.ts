@@ -11,8 +11,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'TacticsRugby',
-        short_name: 'TacticsRugby',
+        name: 'RugbyTactics',
+        short_name: 'RugbyTactics',
         theme_color: '#0d1117',
         background_color: '#0d1117',
         display: 'standalone',

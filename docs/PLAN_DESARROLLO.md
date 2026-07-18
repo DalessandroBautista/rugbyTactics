@@ -1,4 +1,4 @@
-# Plan de desarrollo — TacticsRugby
+# Plan de desarrollo — RugbyTactics
 
 > Documento para implementación asistida por IA.  
 > Cada fase es independiente y entregable. Implementar en orden: las fases anteriores son prerequisito de las siguientes.  
@@ -141,8 +141,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'TacticsRugby',
-        short_name: 'TacticsRugby',
+        name: 'RugbyTactics',
+        short_name: 'RugbyTactics',
         theme_color: '#0d1117',
         background_color: '#0d1117',
         display: 'standalone',

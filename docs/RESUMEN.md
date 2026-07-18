@@ -1,4 +1,4 @@
-# TacticsRugby — Resumen del proyecto
+# RugbyTactics — Resumen del proyecto
 
 ## ¿Qué es?
 Aplicación web para diseñar y animar jugadas de rugby. Permite posicionar jugadores en un campo reglamentario, grabar trayectorias de movimiento, reproducir animaciones y organizar jugadas en una biblioteca.
