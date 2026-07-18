@@ -7,6 +7,7 @@ import { savePlays } from '../utils/persistence'
 import { recordStageVideo, downloadVideo, shareOrDownloadVideo, pickVideoMime } from '../utils/export'
 import { useAnimation } from '../hooks/useAnimation'
 import { useRecording } from '../hooks/useRecording'
+import { playerOrientation, movementOrientation } from '../utils/orientation'
 import { TrajectoryPath } from './TrajectoryPath'
 import { FieldMarkings } from './FieldMarkings'
 import { PlayerToken } from './PlayerToken'
@@ -58,6 +59,7 @@ export const FieldCanvas: React.FC = () => {
   const animatedPositions = useStore(s => s.animatedPositions)
   const animatedBall = useStore(s => s.animatedBall)
   const halfField = useStore(s => s.halfField)
+  const showVision = useStore(s => s.showVision)
 
   useAnimation()
   const { handleDrag, resetLastPoint } = useRecording()
@@ -595,7 +597,7 @@ export const FieldCanvas: React.FC = () => {
   }, [handleDrag, resetLastPoint])
 
   if (!play || size.w === 0) {
-    return <div ref={containerRef} style={{ width: '100%', height: '100%', background: '#0d1117' }} />
+    return <div ref={containerRef} style={{ width: '100%', height: '100%', background: 'var(--bg)' }} />
   }
 
   // En modo 'select', los jugadores YA seleccionados son arrastrables para mover el bloque.
@@ -607,7 +609,7 @@ export const FieldCanvas: React.FC = () => {
   const cursorStyle = editMode === 'record' ? 'crosshair' : 'grab'
 
   return (
-    <div ref={containerRef} style={{ width: '100%', height: '100%', background: '#0d1117', overflow: 'hidden', cursor: cursorStyle }}>
+    <div ref={containerRef} style={{ width: '100%', height: '100%', background: 'var(--bg)', overflow: 'hidden', cursor: cursorStyle }}>
       <Stage
         ref={stageRef}
         width={size.w}
@@ -729,6 +731,18 @@ export const FieldCanvas: React.FC = () => {
                   isAway={player.team === 'away'}
                   isCarrier={play.ball.carriedBy === player.id}
                   draggable={getIsDraggable(player.id)}
+                  orientation={
+                    // Durante la reproducción, la mirada sigue la dirección del movimiento
+                    (isPlaying ? movementOrientation(player.trajectory, currentTime) : null)
+                      ?? playerOrientation(player, play)
+                  }
+                  showVision={showVision}
+                  showRotateHandle={
+                    showVision && editMode !== 'record' && !isPlaying &&
+                    selectedPlayerIds.length === 1 && selectedPlayerIds[0] === player.id
+                  }
+                  onRotate={(deg) => useStore.getState().setPlayerOrientation(player.id, deg)}
+                  onRotateEnd={(deg) => useStore.getState().setPlayerOrientation(player.id, deg, true)}
                   onMouseDown={(e) => handlePlayerMouseDown(e, player.id)}
                   onClick={(e) => handlePlayerClick(e, player.id)}
                   onTap={(e) => {
@@ -776,8 +790,8 @@ export const FieldCanvas: React.FC = () => {
               y={rubberBandRect.y}
               width={rubberBandRect.w}
               height={rubberBandRect.h}
-              fill="rgba(88,166,255,0.08)"
-              stroke="#58a6ff"
+              fill="rgba(224,168,63,0.08)"
+              stroke="#e0a83f"
               strokeWidth={1}
               dash={[4, 4]}
               listening={false}

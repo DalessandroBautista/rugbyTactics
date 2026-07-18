@@ -98,16 +98,16 @@ export const PlayLibrary: React.FC = () => {
         width: '750px',
         maxWidth: '90vw',
         maxHeight: '85vh',
-        background: '#1e1e32',
+        background: 'var(--panel-alt)',
         borderRadius: '12px',
-        border: '1px solid #3a3a4e',
+        border: '1px solid var(--border)',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
       }}>
         <div style={{
           padding: '16px',
-          borderBottom: '1px solid #3a3a4e',
+          borderBottom: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -118,7 +118,7 @@ export const PlayLibrary: React.FC = () => {
           }}>✕</button>
         </div>
 
-        <div style={{ padding: '12px 16px', display: 'flex', gap: '8px', borderBottom: '1px solid #3a3a4e', flexWrap: 'wrap' }}>
+        <div style={{ padding: '12px 16px', display: 'flex', gap: '8px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
           <input
             placeholder="Buscar jugadas..."
             value={search}
@@ -153,15 +153,15 @@ export const PlayLibrary: React.FC = () => {
 
         {/* Tag filter chips */}
         {allTags.length > 0 && (
-          <div style={{ padding: '8px 16px', display: 'flex', gap: 4, flexWrap: 'wrap', borderBottom: '1px solid #3a3a4e' }}>
+          <div style={{ padding: '8px 16px', display: 'flex', gap: 4, flexWrap: 'wrap', borderBottom: '1px solid var(--border)' }}>
             <span style={{ fontSize: 10, color: '#666', marginRight: 4, alignSelf: 'center' }}>Tags:</span>
             <button
               onClick={() => setFilterTag('')}
               style={{
                 ...tagChipStyle,
-                background: !filterTag ? 'rgba(88,166,255,0.25)' : 'rgba(255,255,255,0.08)',
-                color: !filterTag ? '#58a6ff' : '#888',
-                border: `1px solid ${!filterTag ? '#58a6ff' : 'transparent'}`,
+                background: !filterTag ? 'rgba(var(--accent-rgb),0.25)' : 'rgba(255,255,255,0.08)',
+                color: !filterTag ? 'var(--accent)' : '#888',
+                border: `1px solid ${!filterTag ? 'var(--accent)' : 'transparent'}`,
               }}
             >
               Todos
@@ -172,9 +172,9 @@ export const PlayLibrary: React.FC = () => {
                 onClick={() => setFilterTag(filterTag === tag ? '' : tag)}
                 style={{
                   ...tagChipStyle,
-                  background: filterTag === tag ? 'rgba(88,166,255,0.25)' : 'rgba(255,255,255,0.08)',
-                  color: filterTag === tag ? '#58a6ff' : '#888',
-                  border: `1px solid ${filterTag === tag ? '#58a6ff' : 'transparent'}`,
+                  background: filterTag === tag ? 'rgba(var(--accent-rgb),0.25)' : 'rgba(255,255,255,0.08)',
+                  color: filterTag === tag ? 'var(--accent)' : '#888',
+                  border: `1px solid ${filterTag === tag ? 'var(--accent)' : 'transparent'}`,
                 }}
               >
                 {tag}
@@ -184,7 +184,7 @@ export const PlayLibrary: React.FC = () => {
         )}
 
         {showNewForm && (
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid #3a3a4e', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <input
               placeholder="Nombre de la jugada"
               value={newName}
@@ -361,7 +361,7 @@ export const PlayLibrary: React.FC = () => {
 const inputStyle: React.CSSProperties = {
   flex: 1,
   padding: '8px 12px',
-  border: '1px solid #3a3a4e',
+  border: '1px solid var(--border)',
   borderRadius: '6px',
   background: '#2a2a3e',
   color: '#fff',
@@ -371,7 +371,7 @@ const inputStyle: React.CSSProperties = {
 
 const selectStyle: React.CSSProperties = {
   padding: '8px 12px',
-  border: '1px solid #3a3a4e',
+  border: '1px solid var(--border)',
   borderRadius: '6px',
   background: '#2a2a3e',
   color: '#fff',
@@ -400,6 +400,6 @@ const miniTagStyle: React.CSSProperties = {
   fontSize: 9,
   padding: '1px 5px',
   borderRadius: '3px',
-  background: 'rgba(88,166,255,0.12)',
-  color: '#58a6ff',
+  background: 'rgba(var(--accent-rgb),0.12)',
+  color: 'var(--accent)',
 }

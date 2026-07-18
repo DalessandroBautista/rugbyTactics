@@ -53,19 +53,22 @@ function setLineoutPositions(
     ? (fiveMeterX - fifteenMeterX) / (jumpers.length - 1)
     : (fifteenMeterX - fiveMeterX) / (jumpers.length - 1)
 
+  const ballX = touchTop ? throwerX - SCALE : throwerX + SCALE
+
+  // Orientaciones del lineout: el lanzador mira hacia la línea (adentro del
+  // campo) y los saltadores hacia la pelota, como en el juego real.
+  const throwerOrientation = touchTop ? 180 : 0
   const newPlayers = players.map(p => {
     if (p.id === 2) {
-      return { ...p, x: throwerX, y: fieldLengthY, trajectory: [] }
+      return { ...p, x: throwerX, y: fieldLengthY, trajectory: [], orientation: throwerOrientation }
     }
     const idx = jumpers.indexOf(p.id)
     if (idx === -1) return p
     const x = touchTop
       ? fiveMeterX - idx * step
       : fiveMeterX + idx * step
-    return { ...p, x, y: fieldLengthY, trajectory: [] }
+    return { ...p, x, y: fieldLengthY, trajectory: [], orientation: ballX > x ? 0 : 180 }
   })
-
-  const ballX = touchTop ? throwerX - SCALE : throwerX + SCALE
 
   const newBall: Ball = {
     ...ball,

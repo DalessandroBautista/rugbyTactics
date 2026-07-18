@@ -266,7 +266,7 @@ export const Sidebar: React.FC = () => {
       <div style={styles.section}>
         <SectionHeader label="Zonas" color="var(--accent)" />
         <div style={styles.actionRow}>
-          <SmallBtn onClick={() => addZone({ shape: 'rect', x: FIELD_PX.width / 2, y: FIELD_PX.halfway, width: 100, height: 60, color: '#58a6ff', label: 'Zona' })}>
+          <SmallBtn onClick={() => addZone({ shape: 'rect', x: FIELD_PX.width / 2, y: FIELD_PX.halfway, width: 100, height: 60, color: 'var(--accent)', label: 'Zona' })}>
             + Rect
           </SmallBtn>
           <SmallBtn onClick={() => addZone({ shape: 'circle', x: FIELD_PX.width / 2, y: FIELD_PX.halfway, radius: 40, color: '#f39c12', label: 'Zona' })}>
@@ -478,9 +478,9 @@ const SmallBtn: React.FC<{
       borderRadius: 'var(--radius-sm)',
       fontSize: 11,
       fontWeight: 500,
-      background: danger ? 'rgba(248,81,73,0.12)' : accent ? 'rgba(88,166,255,0.12)' : 'var(--panel-alt)',
+      background: danger ? 'rgba(248,81,73,0.12)' : accent ? 'rgba(var(--accent-rgb),0.12)' : 'var(--panel-alt)',
       color: danger ? 'var(--red)' : accent ? 'var(--accent)' : 'var(--text-muted)',
-      border: `1px solid ${danger ? 'rgba(248,81,73,0.28)' : accent ? 'rgba(88,166,255,0.28)' : 'var(--border)'}`,
+      border: `1px solid ${danger ? 'rgba(248,81,73,0.28)' : accent ? 'rgba(var(--accent-rgb),0.28)' : 'var(--border)'}`,
     }}
   >
     {children}
@@ -588,9 +588,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 9,
     padding: '1px 6px',
     borderRadius: 'var(--radius-sm)',
-    background: 'rgba(88,166,255,0.1)',
+    background: 'rgba(var(--accent-rgb),0.1)',
     color: 'var(--accent)',
-    border: '1px solid rgba(88,166,255,0.22)',
+    border: '1px solid rgba(var(--accent-rgb),0.22)',
   },
   nameInput: {
     fontSize: 12,

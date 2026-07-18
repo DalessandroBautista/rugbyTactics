@@ -136,6 +136,7 @@ interface PlayStore {
   loopPlayback: boolean
   presentationMode: boolean
   halfField: boolean
+  showVision: boolean
   // Posiciones efímeras de la animación. No tocan `plays` (que conserva las
   // posiciones base), por lo que reproducir no muta ni re-renderiza todo el árbol.
   animatedPositions: Record<number, { x: number; y: number }> | null
@@ -194,6 +195,9 @@ interface PlayStore {
   toggleLoopPlayback: () => void
   togglePresentationMode: () => void
   toggleHalfField: () => void
+  toggleVision: () => void
+  // Rota la mirada de un jugador. save=true persiste (usar al soltar el drag).
+  setPlayerOrientation: (id: number, orientation: number | null, save?: boolean) => void
 
   loadFromJson: (json: string) => void
   exportToJson: () => string | null
@@ -286,6 +290,7 @@ export const useStore = create<PlayStore>((set, get) => {
     loopPlayback: false,
     presentationMode: false,
     halfField: false,
+    showVision: true,
     animatedPositions: null,
     animatedBall: null,
     history: [],
@@ -673,6 +678,14 @@ export const useStore = create<PlayStore>((set, get) => {
     fitCanvas: () => set(state => ({ requestFit: state.requestFit + 1 })),
     toggleLoopPlayback: () => set(state => ({ loopPlayback: !state.loopPlayback })),
     toggleHalfField: () => set(state => ({ halfField: !state.halfField, requestFit: state.requestFit + 1 })),
+    toggleVision: () => set(state => ({ showVision: !state.showVision })),
+
+    setPlayerOrientation: (id, orientation, save = false) => {
+      updateCurrentPlay(
+        play => ({ ...play, players: play.players.map(p => (p.id === id ? { ...p, orientation } : p)) }),
+        { save },
+      )
+    },
     togglePresentationMode: () => set(state => ({
       presentationMode: !state.presentationMode,
       // al entrar: salir de edición, deseleccionar, recentrar

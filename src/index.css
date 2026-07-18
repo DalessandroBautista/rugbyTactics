@@ -1,17 +1,19 @@
 :root {
-  --bg: #0b0f14;
-  --panel: #13181f;
-  --panel-alt: #1a2030;
-  --panel-hover: #1f2735;
-  --border: #252d3a;
-  --border-subtle: #1c2330;
-  --accent: #4f9eff;
-  --green: #3fb950;
-  --red: #f85149;
-  --yellow: #e3b341;
-  --text: #dde4ed;
-  --text-muted: #7d8fa8;
-  --text-dim: #3d4a5c;
+  /* Pizarra nocturna de club: carbón verdoso, texto tiza, acento ámbar cuero */
+  --bg: #0f1411;
+  --panel: #151c17;
+  --panel-alt: #1b241d;
+  --panel-hover: #212c23;
+  --border: #2a362c;
+  --border-subtle: #212b23;
+  --accent: #e0a83f;
+  --accent-rgb: 224, 168, 63;
+  --green: #4cc06a;
+  --red: #e5544b;
+  --yellow: #e8c455;
+  --text: #ece9dd;
+  --text-muted: #93a394;
+  --text-dim: #4a584c;
   --home: #3b82f6;
   --away: #ef4444;
   --radius-sm: 5px;
@@ -19,11 +21,12 @@
   --radius-lg: 10px;
   --topbar-h: 48px;
   --sidebar-w: 224px;
+  --font-display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
 
   /* mode accent colors */
-  --mode-select: #4f9eff;
-  --mode-move: #e3b341;
-  --mode-record: #f85149;
+  --mode-select: #e0a83f;
+  --mode-move: #6fc287;
+  --mode-record: #e5544b;
 }
 
 *, *::before, *::after {

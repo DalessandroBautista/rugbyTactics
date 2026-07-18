@@ -11,14 +11,14 @@ const MODE_CONFIG: Record<EditMode, { label: string; icon: string; key: string; 
   select: {
     label: 'Seleccionar', icon: '↖', key: 'S',
     color: 'var(--mode-select)',
-    bg: 'rgba(79,158,255,0.12)',
-    border: 'rgba(79,158,255,0.25)',
+    bg: 'rgba(var(--accent-rgb),0.12)',
+    border: 'rgba(var(--accent-rgb),0.25)',
   },
   move: {
     label: 'Mover', icon: '✥', key: 'M',
     color: 'var(--mode-move)',
-    bg: 'rgba(227,179,65,0.12)',
-    border: 'rgba(227,179,65,0.25)',
+    bg: 'rgba(111,194,135,0.12)',
+    border: 'rgba(111,194,135,0.25)',
   },
   record: {
     label: 'Grabar', icon: '⏺', key: 'R',
@@ -49,6 +49,8 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
   const toggleSnapToGrid = useStore(s => s.toggleSnapToGrid)
   const halfField = useStore(s => s.halfField)
   const toggleHalfField = useStore(s => s.toggleHalfField)
+  const showVision = useStore(s => s.showVision)
+  const toggleVision = useStore(s => s.toggleVision)
   const fitCanvas = useStore(s => s.fitCanvas)
   const history = useStore(s => s.history)
   const future = useStore(s => s.future)
@@ -144,7 +146,11 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
           flexShrink: 0,
         }}>TR</div>
         <div>
-          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)', letterSpacing: '-0.3px', lineHeight: 1.2 }}>
+          <div style={{
+            fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16,
+            color: 'var(--text)', letterSpacing: '0.8px', lineHeight: 1.1,
+            textTransform: 'uppercase',
+          }}>
             TacticsRugby
           </div>
           <div style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'monospace', lineHeight: 1 }}>
@@ -264,6 +270,7 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
       <ToggleBtn active={multiSelect} onClick={toggleMultiSelect} title="Selección múltiple — activá y hacé clic en jugadores, o arrastrá en el campo">Multi</ToggleBtn>
       <ToggleBtn active={snapToGrid} onClick={toggleSnapToGrid} title="Snap a grilla de 1 metro">Snap</ToggleBtn>
       <ToggleBtn active={halfField} onClick={toggleHalfField} title="Mostrar solo la mitad atacante del campo">½ Cancha</ToggleBtn>
+      <ToggleBtn active={showVision} onClick={toggleVision} title="Cono de visión: hacia dónde mira cada jugador. Seleccioná un jugador y arrastrá la manija para rotarlo">Visión</ToggleBtn>
 
       <Divider />
 
@@ -345,7 +352,7 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
         <button
           onClick={onShowAuth}
           title="Iniciar sesión para sincronizar jugadas entre dispositivos"
-          style={{ ...ghostBase, color: 'var(--accent)', border: '1px solid rgba(79,158,255,0.4)', whiteSpace: 'nowrap' }}
+          style={{ ...ghostBase, color: 'var(--accent)', border: '1px solid rgba(var(--accent-rgb),0.4)', whiteSpace: 'nowrap' }}
         >
           Iniciar sesión
         </button>
@@ -366,8 +373,8 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
       >
         <div
           style={{
-            background: '#1e1e32',
-            border: '1px solid #3a3a4e',
+            background: 'var(--panel-alt)',
+            border: '1px solid var(--border)',
             borderRadius: 12,
             padding: 20,
             width: 460,
@@ -396,8 +403,8 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
               onFocus={e => e.target.select()}
               style={{
                 flex: 1,
-                background: '#0d1117',
-                border: '1px solid #3a3a4e',
+                background: 'var(--bg)',
+                border: '1px solid var(--border)',
                 borderRadius: 6,
                 color: '#aaa',
                 fontSize: 11,
@@ -412,9 +419,9 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
               style={{
                 padding: '6px 14px',
                 borderRadius: 6,
-                background: urlCopied ? 'rgba(63,185,80,0.15)' : 'rgba(79,158,255,0.12)',
+                background: urlCopied ? 'rgba(63,185,80,0.15)' : 'rgba(var(--accent-rgb),0.12)',
                 color: urlCopied ? 'var(--green)' : 'var(--accent)',
-                border: `1px solid ${urlCopied ? 'rgba(63,185,80,0.4)' : 'rgba(79,158,255,0.3)'}`,
+                border: `1px solid ${urlCopied ? 'rgba(63,185,80,0.4)' : 'rgba(var(--accent-rgb),0.3)'}`,
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -455,9 +462,9 @@ const ToggleBtn: React.FC<{
 }> = ({ active, onClick, title, children }) => (
   <button onClick={onClick} title={title} style={{
     ...ghostBase,
-    background: active ? 'rgba(79,158,255,0.12)' : 'transparent',
+    background: active ? 'rgba(var(--accent-rgb),0.12)' : 'transparent',
     color: active ? 'var(--accent)' : 'var(--text-muted)',
-    border: `1px solid ${active ? 'rgba(79,158,255,0.3)' : 'var(--border)'}`,
+    border: `1px solid ${active ? 'rgba(var(--accent-rgb),0.3)' : 'var(--border)'}`,
   }}>{children}</button>
 )
 

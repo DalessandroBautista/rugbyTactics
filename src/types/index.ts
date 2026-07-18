@@ -13,6 +13,9 @@ export interface Player {
   x: number
   y: number
   trajectory: TrajectoryPoint[]
+  /** Orientación de la mirada en grados (coords de campo, 0 = +x).
+   *  undefined/null = automática: hacia adelante, o hacia la pelota en un lineout. */
+  orientation?: number | null
 }
 
 export interface Ball {

@@ -77,14 +77,14 @@ export const ExportDialog: React.FC = () => {
       <div style={{
         width: '400px',
         maxWidth: '90vw',
-        background: '#1e1e32',
+        background: 'var(--panel-alt)',
         borderRadius: '12px',
-        border: '1px solid #3a3a4e',
+        border: '1px solid var(--border)',
         overflow: 'hidden',
       }}>
         <div style={{
           padding: '16px',
-          borderBottom: '1px solid #3a3a4e',
+          borderBottom: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -107,7 +107,7 @@ export const ExportDialog: React.FC = () => {
             🎬 Exportar como video (MP4)
           </button>
 
-          <div style={{ borderTop: '1px solid #3a3a4e', paddingTop: '12px', marginTop: '4px' }}>
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px', marginTop: '4px' }}>
             <div style={{ fontSize: '13px', color: '#aaa', marginBottom: '8px' }}>
               Export all plays as CSV
             </div>
@@ -116,7 +116,7 @@ export const ExportDialog: React.FC = () => {
             </button>
           </div>
 
-          <div style={{ borderTop: '1px solid #3a3a4e', paddingTop: '12px', marginTop: '4px' }}>
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px', marginTop: '4px' }}>
             <div style={{ fontSize: '13px', color: '#aaa', marginBottom: '8px' }}>
               Import play from JSON
             </div>
@@ -144,7 +144,7 @@ export const ExportDialog: React.FC = () => {
 
 const exportButtonStyle: React.CSSProperties = {
   padding: '10px 16px',
-  border: '1px solid #3a3a4e',
+  border: '1px solid var(--border)',
   borderRadius: '8px',
   cursor: 'pointer',
   fontSize: '13px',

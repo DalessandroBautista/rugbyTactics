@@ -79,7 +79,7 @@ export async function recordStageVideo(
   let raf = 0
   await new Promise<void>((resolve) => {
     const loop = () => {
-      ctx.fillStyle = '#0d1117'
+      ctx.fillStyle = '#0f1411'
       ctx.fillRect(0, 0, width, height)
       try { ctx.drawImage(getFrame(), 0, 0, width, height) } catch { /* frame no listo */ }
       if (performance.now() - t0 >= durationMs) { resolve(); return }

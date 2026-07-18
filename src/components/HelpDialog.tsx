@@ -10,9 +10,10 @@ const SECTIONS: Record<Tab, { title: string; items: Array<{ label: string; desc:
       { label: '1. Armá tu jugada', desc: 'Elegí un modo (Seleccionar / Mover / Grabar) y ubicá a los 15 jugadores en el campo.' },
       { label: '2. Dibujá las rutas', desc: 'En modo Grabar, seleccioná jugadores y arrastralos para grabar sus movimientos en tiempo real.' },
       { label: '3. Reproducí', desc: 'Presioná Espacio o el botón Play para ver la animación de la jugada.' },
-      { label: '4. Cantos de jugada', desc: 'Agregá burbujas de texto que aparecen en momentos específicos de la jugada (botón Canto).' },
-      { label: '5. Exportá', desc: 'Descargá como PNG, video MP4, o compartí por link con un solo clic.' },
-      { label: '6. Modo Presentación', desc: 'Pantalla completa sin ediciones, ideal para proyectar en el vestuario.' },
+      { label: '4. Cono de visión', desc: 'Cada jugador muestra hacia dónde mira (toggle Visión). Por defecto miran al frente; en un lineout, hacia la pelota. Seleccioná un jugador y arrastrá la manija para rotarlo.' },
+      { label: '5. Cantos de jugada', desc: 'Agregá burbujas de texto que aparecen en momentos específicos de la jugada (botón Canto).' },
+      { label: '6. Exportá', desc: 'Descargá como PNG, video MP4, o compartí por link con un solo clic.' },
+      { label: '7. Modo Presentación', desc: 'Pantalla completa sin ediciones, ideal para proyectar en el vestuario.' },
     ],
   },
   mouse: {
