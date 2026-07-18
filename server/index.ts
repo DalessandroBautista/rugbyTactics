@@ -7,6 +7,7 @@ import { existsSync } from 'fs'
 import { initDb } from './db.js'
 import { authRouter } from './routes/auth.js'
 import { playsRouter } from './routes/plays.js'
+import { playlistsRouter, publicPlaylistsRouter } from './routes/playlists.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const isProd = process.env.NODE_ENV === 'production'
@@ -25,6 +26,8 @@ app.use(express.json({ limit: '10mb' }))
 
 app.use('/api/auth', authRouter)
 app.use('/api/plays', playsRouter)
+app.use('/api/playlists', playlistsRouter)
+app.use('/api/public/playlists', publicPlaylistsRouter)
 app.get('/api/health', (_, res) => res.json({ ok: true, ts: new Date().toISOString() }))
 
 // En producción servir el build de Vite como SPA

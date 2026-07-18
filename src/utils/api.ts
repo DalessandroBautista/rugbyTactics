@@ -1,4 +1,4 @@
-import type { Play } from '../types'
+import type { Play, PlaylistMeta, PublicPlaylist } from '../types'
 
 const BASE = '/api'
 
@@ -42,4 +42,23 @@ export const api = {
     req<Play[]>('/plays/sync', {
       method: 'POST', body: JSON.stringify({ plays }),
     }),
+
+  // ── Listas de reproducción ────────────────────────────────────────────────
+  listPlaylists: () => req<PlaylistMeta[]>('/playlists'),
+
+  createPlaylist: (name: string, plays: Play[]) =>
+    req<{ id: string }>('/playlists', {
+      method: 'POST', body: JSON.stringify({ name, plays }),
+    }),
+
+  updatePlaylist: (id: string, updates: { name?: string; plays?: Play[] }) =>
+    req<{ ok: true }>(`/playlists/${id}`, {
+      method: 'PUT', body: JSON.stringify(updates),
+    }),
+
+  deletePlaylist: (id: string) =>
+    req<{ ok: true }>(`/playlists/${id}`, { method: 'DELETE' }),
+
+  /** Pública: no requiere sesión — es lo que abre quien recibe el link. */
+  getPublicPlaylist: (id: string) => req<PublicPlaylist>(`/public/playlists/${id}`),
 }

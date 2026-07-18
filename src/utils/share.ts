@@ -30,6 +30,21 @@ export function readSharedPlay(): Play | null {
   }
 }
 
+const LIST_PREFIX = '#list='
+
+/** URL corta de una lista de reproducción alojada en el servidor. */
+export function buildPlaylistUrl(id: string): string {
+  return `${location.origin}${location.pathname}${LIST_PREFIX}${id}`
+}
+
+/** Si la URL actual apunta a una lista compartida, devuelve su id. */
+export function readSharedPlaylistId(): string | null {
+  const hash = location.hash
+  if (!hash.startsWith(LIST_PREFIX)) return null
+  const id = hash.slice(LIST_PREFIX.length).trim()
+  return id.length > 0 ? id : null
+}
+
 /** Limpia el hash de la URL sin recargar la página. */
 export function clearShareHash(): void {
   history.replaceState(null, '', location.pathname + location.search)

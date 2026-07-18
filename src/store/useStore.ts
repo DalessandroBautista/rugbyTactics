@@ -16,7 +16,7 @@ import {
   OverlayImage,
   SpeechBubble,
 } from '../types'
-import { loadPlays, savePlays, loadCurrentPlayId, saveCurrentPlayId } from '../utils/persistence'
+import { loadPlays, savePlays, loadCurrentPlayId, saveCurrentPlayId, suspendPersistence } from '../utils/persistence'
 import { getInterpolatedPosition } from '../utils/interpolation'
 
 function generateId(): string {
@@ -137,6 +137,11 @@ interface PlayStore {
   presentationMode: boolean
   halfField: boolean
   showVision: boolean
+  // Visor de listas compartidas: mientras está activo, `plays` contiene las
+  // jugadas de la lista y la biblioteca real queda resguardada en el backup.
+  playlistViewer: { id: string; name: string } | null
+  libraryBackup: { plays: Play[]; currentPlayId: string | null } | null
+  showPlaylistDialog: boolean
   // Posiciones efímeras de la animación. No tocan `plays` (que conserva las
   // posiciones base), por lo que reproducir no muta ni re-renderiza todo el árbol.
   animatedPositions: Record<number, { x: number; y: number }> | null
@@ -196,6 +201,13 @@ interface PlayStore {
   togglePresentationMode: () => void
   toggleHalfField: () => void
   toggleVision: () => void
+  togglePlaylistDialog: () => void
+  openPlaylistViewer: (list: { id: string; name: string; plays: Play[] }) => void
+  closePlaylistViewer: () => void
+  // Copia la jugada actual del visor a la biblioteca del usuario y sale del visor
+  editCopyOfViewerPlay: () => void
+  // Reemplaza el contenido de una jugada local con una versión del servidor
+  replacePlayContent: (id: string, source: Play) => void
   // Rota la mirada de un jugador. save=true persiste (usar al soltar el drag).
   setPlayerOrientation: (id: number, orientation: number | null, save?: boolean) => void
 
@@ -291,6 +303,9 @@ export const useStore = create<PlayStore>((set, get) => {
     presentationMode: false,
     halfField: false,
     showVision: true,
+    playlistViewer: null,
+    libraryBackup: null,
+    showPlaylistDialog: false,
     animatedPositions: null,
     animatedBall: null,
     history: [],
@@ -679,6 +694,85 @@ export const useStore = create<PlayStore>((set, get) => {
     toggleLoopPlayback: () => set(state => ({ loopPlayback: !state.loopPlayback })),
     toggleHalfField: () => set(state => ({ halfField: !state.halfField, requestFit: state.requestFit + 1 })),
     toggleVision: () => set(state => ({ showVision: !state.showVision })),
+    togglePlaylistDialog: () => set(state => ({ showPlaylistDialog: !state.showPlaylistDialog })),
+
+    openPlaylistViewer: (list) => {
+      if (list.plays.length === 0) return
+      const state = get()
+      // Resguardar la biblioteca real y suspender la persistencia: nada de lo
+      // que pase en el visor debe tocar las jugadas propias del usuario.
+      suspendPersistence(true)
+      set({
+        libraryBackup: state.libraryBackup ?? { plays: state.plays, currentPlayId: state.currentPlayId },
+        playlistViewer: { id: list.id, name: list.name },
+        plays: clonePlays(list.plays),
+        currentPlayId: list.plays[0].id,
+        presentationMode: true,
+        editMode: 'select',
+        selectedPlayerId: null,
+        selectedPlayerIds: [],
+        selectedBall: false,
+        isPlaying: false,
+        isRecording: false,
+        currentTime: 0,
+        animatedPositions: null,
+        animatedBall: null,
+        history: [],
+        future: [],
+        requestFit: state.requestFit + 1,
+      })
+    },
+
+    closePlaylistViewer: () => {
+      const state = get()
+      const backup = state.libraryBackup
+      suspendPersistence(false)
+      set({
+        playlistViewer: null,
+        libraryBackup: null,
+        ...(backup ? { plays: backup.plays, currentPlayId: backup.currentPlayId } : {}),
+        presentationMode: false,
+        isPlaying: false,
+        currentTime: 0,
+        animatedPositions: null,
+        animatedBall: null,
+        history: [],
+        future: [],
+        requestFit: state.requestFit + 1,
+      })
+    },
+
+    editCopyOfViewerPlay: () => {
+      const state = get()
+      const viewer = state.playlistViewer
+      const viewerPlay = state.plays.find(p => p.id === state.currentPlayId)
+      if (!viewer || !viewerPlay) return
+      const copy: Play = {
+        ...clonePlays([viewerPlay])[0],
+        id: generateId(),
+        name: `${viewerPlay.name} (copia)`,
+        createdAt: new Date().toISOString(),
+        origin: { listId: viewer.id, playId: viewerPlay.id },
+      }
+      get().closePlaylistViewer()
+      const after = get()
+      const newPlays = [...after.plays, copy]
+      set({ plays: newPlays, currentPlayId: copy.id, isDirty: true })
+      savePlays(newPlays)
+      saveCurrentPlayId(copy.id)
+    },
+
+    replacePlayContent: (id, source) => {
+      const state = get()
+      const target = state.plays.find(p => p.id === id)
+      if (!target) return
+      get().pushHistory()
+      // Conserva identidad local (id, origin); restaura todo el contenido
+      const restored: Play = { ...clonePlays([source])[0], id: target.id, origin: target.origin }
+      const newPlays = state.plays.map(p => (p.id === id ? restored : p))
+      set({ plays: newPlays, isDirty: true, currentTime: 0, isPlaying: false, animatedPositions: null, animatedBall: null })
+      savePlays(newPlays)
+    },
 
     setPlayerOrientation: (id, orientation, save = false) => {
       updateCurrentPlay(

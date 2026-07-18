@@ -39,6 +39,24 @@ export interface Play {
   zones?: TacticalZone[]
   overlayImage?: OverlayImage
   speechBubbles?: SpeechBubble[]
+  /** Si la jugada es una copia editable de una lista compartida, referencia
+   *  al original en el servidor para poder restaurarlo. */
+  origin?: { listId: string; playId: string }
+}
+
+/** Metadata de una lista de reproducción propia (sin las jugadas). */
+export interface PlaylistMeta {
+  id: string
+  name: string
+  count: number
+  updatedAt: string
+}
+
+/** Lista compartida tal como la recibe quien abre el link. */
+export interface PublicPlaylist {
+  id: string
+  name: string
+  plays: Play[]
 }
 
 export type ZoneShape = 'rect' | 'circle' | 'arrow'

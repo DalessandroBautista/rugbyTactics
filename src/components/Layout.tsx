@@ -10,6 +10,8 @@ import { PresentationBar } from './PresentationBar'
 import { WelcomeOverlay } from './WelcomeOverlay'
 import { AuthModal } from './AuthModal'
 import { HelpDialog } from './HelpDialog'
+import { PlaylistDialog } from './PlaylistDialog'
+import { PlaylistViewerBar } from './PlaylistViewerBar'
 import { useStore } from '../store/useStore'
 
 export const Layout: React.FC = () => {
@@ -29,6 +31,7 @@ export const Layout: React.FC = () => {
       <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: 'var(--bg)', position: 'relative' }}>
         <FieldCanvas />
         {play && <PresentationBar />}
+        <PlaylistViewerBar />
       </div>
     )
   }
@@ -95,6 +98,7 @@ export const Layout: React.FC = () => {
         />
       )}
       <HelpDialog />
+      <PlaylistDialog />
       {isExportingVideo && (
         <div style={{
           position: 'fixed',

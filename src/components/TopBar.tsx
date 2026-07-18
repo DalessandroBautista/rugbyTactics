@@ -5,6 +5,7 @@ import { useServerSync } from '../hooks/useServerSync'
 import { EditMode } from '../types'
 import { APP_VERSION } from '../version'
 import { buildShareUrl } from '../utils/share'
+import { api } from '../utils/api'
 import { SpeechBubbleInput } from './SpeechBubbleInput'
 
 const MODE_CONFIG: Record<EditMode, { label: string; icon: string; key: string; color: string; bg: string; border: string }> = {
@@ -126,6 +127,25 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
   }
 
   const activeCfg = MODE_CONFIG[editMode]
+  const currentPlay = plays.find(p => p.id === currentPlayId)
+
+  // Restaura una copia editada a la versión original de la lista compartida
+  const handleRestoreOriginal = async () => {
+    const origin = currentPlay?.origin
+    if (!currentPlay || !origin) return
+    if (!confirm('¿Restaurar la versión compartida original? Tus cambios locales se pueden deshacer con Ctrl+Z.')) return
+    try {
+      const list = await api.getPublicPlaylist(origin.listId)
+      const original = list.plays.find(p => p.id === origin.playId)
+      if (!original) {
+        alert('La jugada original ya no está en la lista compartida.')
+        return
+      }
+      useStore.getState().replacePlayContent(currentPlay.id, original)
+    } catch {
+      alert('No se pudo obtener la lista compartida (¿fue eliminada o no hay conexión?).')
+    }
+  }
 
   return (
     <>
@@ -323,6 +343,14 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
         highlight={shared}
         items={[
           { label: 'Copiar enlace', title: 'El enlace contiene toda la jugada — no necesita servidor', onClick: handleShare },
+          {
+            label: 'Lista de reproducción…',
+            title: 'Armá una lista de jugadas y compartila con un link que se reproduce en la app',
+            onClick: () => {
+              if (user) useStore.getState().togglePlaylistDialog()
+              else onShowAuth()
+            },
+          },
           ...(exportPNG ? [{ label: 'Descargar imagen PNG', onClick: exportPNG }] : []),
           { label: 'Exportar / importar JSON', onClick: toggleExportDialog },
         ]}
@@ -331,6 +359,11 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
         label="⋯"
         title="Más acciones"
         items={[
+          ...(currentPlay?.origin ? [{
+            label: 'Restaurar versión compartida',
+            title: 'Vuelve esta copia al estado original de la lista de la que vino',
+            onClick: handleRestoreOriginal,
+          }] : []),
           {
             label: 'Espejar jugada',
             title: 'Refleja horizontalmente posiciones y rutas',

@@ -23,5 +23,16 @@ export async function initDb(): Promise<void> {
     )
   `
   await sql`CREATE INDEX IF NOT EXISTS idx_plays_user ON plays(user_id)`
+  await sql`
+    CREATE TABLE IF NOT EXISTS playlists (
+      id         TEXT PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name       TEXT NOT NULL,
+      data       JSONB NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `
+  await sql`CREATE INDEX IF NOT EXISTS idx_playlists_user ON playlists(user_id)`
   console.log('[db] Schema listo')
 }

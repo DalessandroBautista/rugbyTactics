@@ -4,7 +4,8 @@ import { useStore } from './store/useStore'
 import { useAuth } from './store/useAuth'
 import { useKeyboard } from './hooks/useKeyboard'
 import { useServerSync } from './hooks/useServerSync'
-import { readSharedPlay, clearShareHash } from './utils/share'
+import { readSharedPlay, readSharedPlaylistId, clearShareHash } from './utils/share'
+import { api } from './utils/api'
 import { ensureFFmpegLoaded } from './utils/ffmpegFix'
 
 function App() {
@@ -29,6 +30,21 @@ function App() {
       useStore.getState().loadFromJson(JSON.stringify(shared))
       clearShareHash()
     }
+  }, [])
+
+  // Abrir una lista de reproducción compartida (#list=...) en el visor
+  useEffect(() => {
+    const listId = readSharedPlaylistId()
+    if (!listId) return
+    api.getPublicPlaylist(listId)
+      .then(list => {
+        clearShareHash()
+        useStore.getState().openPlaylistViewer(list)
+      })
+      .catch(() => {
+        clearShareHash()
+        alert('No se pudo abrir la lista compartida: el link no existe o fue eliminado.')
+      })
   }, [])
 
   // Primera visita: mostrar ayuda automáticamente

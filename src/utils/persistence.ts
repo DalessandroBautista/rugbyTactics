@@ -7,6 +7,23 @@ const SAVE_DEBOUNCE_MS = 300
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let pendingPlays: Play[] | null = null
 
+// Mientras el visor de listas compartidas está abierto, la biblioteca local se
+// reemplaza temporalmente por las jugadas de la lista: suspender la escritura
+// evita pisar las jugadas propias del usuario.
+let suspended = false
+
+export function suspendPersistence(value: boolean): void {
+  suspended = value
+  if (value) {
+    // Descartar cualquier escritura pendiente del estado anterior
+    if (saveTimer !== null) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+    }
+    pendingPlays = null
+  }
+}
+
 function writePlays(plays: Play[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(plays))
@@ -21,6 +38,7 @@ function writePlays(plays: Play[]): void {
  * pendiente se persiste con flushPlays() (ver beforeunload, abajo).
  */
 export function savePlays(plays: Play[]): void {
+  if (suspended) return
   pendingPlays = plays
   if (saveTimer !== null) return
   saveTimer = setTimeout(() => {
@@ -58,6 +76,7 @@ export function loadPlays(): Play[] {
 }
 
 export function saveCurrentPlayId(id: string): void {
+  if (suspended) return
   try {
     localStorage.setItem(CURRENT_PLAY_KEY, id)
   } catch {
