@@ -4,8 +4,10 @@ import { useAuth } from '../store/useAuth'
 import { api } from '../utils/api'
 import { buildPlaylistUrl } from '../utils/share'
 import { PlaylistMeta } from '../types'
+import type { Play } from '../types'
+import { movePlaylistItem, refreshPlaylistSnapshots } from '../utils/playlists'
 
-type Tab = 'create' | 'mine'
+type Tab = 'create' | 'mine' | 'edit'
 
 /**
  * Crear y administrar listas de reproducción compartibles. Las listas viven en
@@ -26,6 +28,10 @@ export const PlaylistDialog: React.FC = () => {
   const [createdUrl, setCreatedUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const [mine, setMine] = useState<PlaylistMeta[] | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editorPlays, setEditorPlays] = useState<Play[]>([])
+  const [editorName, setEditorName] = useState('')
+  const [notice, setNotice] = useState<string | null>(null)
 
   // Al abrir: resetear y precargar mis listas
   useEffect(() => {
@@ -83,6 +89,33 @@ export const PlaylistDialog: React.FC = () => {
     } catch (e) {
       setError((e as Error).message)
     }
+  }
+
+  const handleEdit = async (id: string) => {
+    setBusy(true); setError(null); setNotice(null)
+    try {
+      const list = await api.getPlaylist(id)
+      setEditingId(id); setEditorName(list.name); setEditorPlays(list.plays); setTab('edit')
+    } catch (e) { setError((e as Error).message) }
+    finally { setBusy(false) }
+  }
+
+  const handleRefresh = () => {
+    const refreshed = refreshPlaylistSnapshots(editorPlays, plays)
+    setEditorPlays(refreshed.plays)
+    setNotice(refreshed.missingIds.length
+      ? `Se actualizaron las disponibles. ${refreshed.missingIds.length} ya no están en tu biblioteca y conservaron su snapshot.`
+      : 'Todas las jugadas se actualizaron con su versión actual.')
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingId || !editorName.trim() || editorPlays.length === 0) return
+    setBusy(true); setError(null)
+    try {
+      await api.updatePlaylist(editingId, { name: editorName.trim(), plays: editorPlays })
+      setMine(await api.listPlaylists()); setTab('mine'); setNotice(null)
+    } catch (e) { setError((e as Error).message) }
+    finally { setBusy(false) }
   }
 
   return (
@@ -197,6 +230,7 @@ export const PlaylistDialog: React.FC = () => {
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 4, marginLeft: 'auto', flexShrink: 0 }}>
+                      <button onClick={() => handleEdit(l.id)} style={ghostBtn}>Editar</button>
                       <button onClick={() => handleCopy(buildPlaylistUrl(l.id), l.id)} style={ghostBtn}>
                         {copied === l.id ? '¡Copiado!' : 'Copiar link'}
                       </button>
@@ -205,6 +239,37 @@ export const PlaylistDialog: React.FC = () => {
                   </div>
                 ))}
                 {error && <p style={errorText}>{error}</p>}
+              </div>
+            )}
+
+            {tab === 'edit' && (
+              <div>
+                <button onClick={() => setTab('mine')} style={{ ...ghostBtn, marginBottom: 10 }}>← Mis listas</button>
+                <label style={label}>Nombre</label>
+                <input value={editorName} onChange={e => setEditorName(e.target.value)} style={input} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+                  <label style={{ ...label, margin: 0 }}>Orden y contenido</label>
+                  <button onClick={handleRefresh} style={ghostBtn}>Actualizar versiones</button>
+                </div>
+                {notice && <p style={{ fontSize: 11, color: 'var(--accent)', lineHeight: 1.4 }}>{notice}</p>}
+                <div style={{ ...playList, maxHeight: 300, marginTop: 7 }}>
+                  {editorPlays.map((play, index) => <div key={`${play.id}-${index}`} draggable
+                    onDragStart={e => e.dataTransfer.setData('text/plain', String(index))}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={e => { e.preventDefault(); setEditorPlays(movePlaylistItem(editorPlays, Number(e.dataTransfer.getData('text/plain')), index)) }}
+                    style={{ ...playRow, cursor: 'grab', borderBottom: '1px solid var(--border-subtle)' }}>
+                    <span style={{ color: 'var(--text-dim)', fontFamily: 'monospace' }}>⠿ {index + 1}</span>
+                    <span style={{ flex: 1, color: 'var(--text)' }}>{play.name}</span>
+                    <button disabled={index === 0} onClick={() => setEditorPlays(movePlaylistItem(editorPlays, index, index - 1))} style={ghostBtn}>↑</button>
+                    <button disabled={index === editorPlays.length - 1} onClick={() => setEditorPlays(movePlaylistItem(editorPlays, index, index + 1))} style={ghostBtn}>↓</button>
+                    <button onClick={() => setEditorPlays(editorPlays.filter((_, i) => i !== index))} style={{ ...ghostBtn, color: 'var(--red)' }}>Quitar</button>
+                  </div>)}
+                </div>
+                <label style={{ ...label, marginTop: 12 }}>Agregar desde tu biblioteca</label>
+                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{plays.filter(play => !editorPlays.some(item => item.id === play.id)).map(play =>
+                  <button key={play.id} onClick={() => setEditorPlays([...editorPlays, structuredClone(play)])} style={ghostBtn}>+ {play.name}</button>)}</div>
+                {error && <p style={errorText}>{error}</p>}
+                <button disabled={busy || !editorName.trim() || editorPlays.length === 0} onClick={handleSaveEdit} style={primaryBtn}>{busy ? 'Guardando…' : 'Guardar lista'}</button>
               </div>
             )}
           </>

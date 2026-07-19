@@ -22,6 +22,20 @@ playlistsRouter.get('/', async (req: AuthRequest, res) => {
   res.json(rows.map(r => ({ id: r.id, name: r.name, count: Number(r.count), updatedAt: r.updated_at })))
 })
 
+// GET /api/playlists/:id — detalle editable, solo para el dueño
+playlistsRouter.get('/:id', async (req: AuthRequest, res) => {
+  const rows = await sql<{ id: string; name: string; data: unknown }[]>`
+    SELECT id, name, data FROM playlists
+    WHERE id = ${String(req.params.id)} AND user_id = ${req.userId!}
+    LIMIT 1
+  `
+  if (!rows[0]) {
+    res.status(404).json({ error: 'Lista no encontrada' })
+    return
+  }
+  res.json({ id: rows[0].id, name: rows[0].name, plays: rows[0].data })
+})
+
 // POST /api/playlists — crea una lista con un snapshot de las jugadas
 playlistsRouter.post('/', async (req: AuthRequest, res) => {
   const { name, plays } = req.body ?? {}

@@ -41,7 +41,7 @@ export interface Play {
   speechBubbles?: SpeechBubble[]
   /** Si la jugada es una copia editable de una lista compartida, referencia
    *  al original en el servidor para poder restaurarlo. */
-  origin?: { listId: string; playId: string }
+  origin?: { listId: string; playId: string; basePlay?: Play }
 }
 
 /** Metadata de una lista de reproducción propia (sin las jugadas). */
@@ -195,10 +195,14 @@ export const ATTACK_FORMATION: Record<number, { ax: number; ay: number }> = {
 export const PLAY_CATEGORIES = [
   'Lineout',
   'Scrum',
-  'Attack',
-  'Defense',
-  'Backline',
+  'Ataque',
+  'Defensa',
   'Maul',
-  'Kick',
+  'Patada',
   'General',
+]
+
+export const TAG_PRESETS = [
+  'ataque', 'defensa', 'lineout', 'scrum', 'maul', 'patada',
+  'mitad de cancha', '22 metros', 'salida', 'reinicio', 'backs', 'forwards',
 ]

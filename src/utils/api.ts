@@ -17,23 +17,77 @@ async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
     },
   })
   if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: string }
-    throw new Error(body.error ?? `HTTP ${res.status}`)
+    const body = await res.json().catch(() => ({})) as { error?: string; conflict?: boolean; currentData?: Play }
+    throw new ApiError(body.error ?? `HTTP ${res.status}`, res.status, body)
   }
   return res.json() as Promise<T>
 }
 
-export interface AuthUser { id: number; username: string }
+export interface AuthUser { id: number; email: string }
+export interface AuthSession { token: string; user: AuthUser }
+export class ApiError extends Error {
+  constructor(message: string, public status: number, public body: { conflict?: boolean; currentData?: Play }) {
+    super(message)
+  }
+}
+
+export interface PlayProposal {
+  id: string
+  playlistId: string
+  playId: string
+  proposerEmail?: string
+  baseData: Play
+  proposedData: Play
+  message: string | null
+  status: 'pending' | 'accepted' | 'rejected'
+  summary: { metadata: string[]; playersMoved: number; trajectoriesChanged: number; ballChanged: boolean; tacticalElementsChanged: boolean }
+  createdAt: string
+}
 
 export const api = {
-  register: (username: string, password: string) =>
-    req<{ token: string; user: AuthUser }>('/auth/register', {
-      method: 'POST', body: JSON.stringify({ username, password }),
+  requestRegisterCode: (email: string) =>
+    req<{ challengeId: string; message: string }>('/auth/register/code', {
+      method: 'POST', body: JSON.stringify({ email }),
     }),
 
-  login: (username: string, password: string) =>
-    req<{ token: string; user: AuthUser }>('/auth/login', {
-      method: 'POST', body: JSON.stringify({ username, password }),
+  verifyRegisterCode: (challengeId: string, code: string) =>
+    req<{ flowToken: string }>('/auth/register/verify', {
+      method: 'POST', body: JSON.stringify({ challengeId, code }),
+    }),
+
+  completeRegistration: (flowToken: string, password: string) =>
+    req<AuthSession>('/auth/register/complete', {
+      method: 'POST', body: JSON.stringify({ flowToken, password }),
+    }),
+
+  login: (email: string, password: string) =>
+    req<AuthSession>('/auth/login/password', {
+      method: 'POST', body: JSON.stringify({ email, password }),
+    }),
+
+  requestLoginCode: (email: string) =>
+    req<{ challengeId: string; message: string }>('/auth/login/code', {
+      method: 'POST', body: JSON.stringify({ email }),
+    }),
+
+  verifyLoginCode: (challengeId: string, code: string) =>
+    req<AuthSession>('/auth/login/verify', {
+      method: 'POST', body: JSON.stringify({ challengeId, code }),
+    }),
+
+  requestResetCode: (email: string) =>
+    req<{ challengeId: string; message: string }>('/auth/reset/code', {
+      method: 'POST', body: JSON.stringify({ email }),
+    }),
+
+  verifyResetCode: (challengeId: string, code: string) =>
+    req<{ flowToken: string }>('/auth/reset/verify', {
+      method: 'POST', body: JSON.stringify({ challengeId, code }),
+    }),
+
+  completePasswordReset: (flowToken: string, password: string) =>
+    req<AuthSession>('/auth/reset/complete', {
+      method: 'POST', body: JSON.stringify({ flowToken, password }),
     }),
 
   me: () => req<{ user: AuthUser }>('/auth/me'),
@@ -61,4 +115,15 @@ export const api = {
 
   /** Pública: no requiere sesión — es lo que abre quien recibe el link. */
   getPublicPlaylist: (id: string) => req<PublicPlaylist>(`/public/playlists/${id}`),
+
+  getPlaylist: (id: string) => req<PublicPlaylist>(`/playlists/${id}`),
+
+  submitProposal: (input: { listId: string; playId: string; baseData: Play; proposedData: Play; message?: string }) =>
+    req<PlayProposal>('/proposals', { method: 'POST', body: JSON.stringify(input) }),
+  proposalInbox: () => req<PlayProposal[]>('/proposals/inbox'),
+  myProposals: () => req<PlayProposal[]>('/proposals/mine'),
+  acceptProposal: (id: string, override = false) => req<PlayProposal>(`/proposals/${id}/accept`, {
+    method: 'POST', body: JSON.stringify({ override }),
+  }),
+  rejectProposal: (id: string) => req<PlayProposal>(`/proposals/${id}/reject`, { method: 'POST' }),
 }

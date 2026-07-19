@@ -122,4 +122,17 @@ describe('useStore', () => {
     useStore.getState().movePlayer(player.id, 50, 60)
     expect(useStore.getState().animatedPositions).toBeNull()
   })
+
+  it('keeps the shared base snapshot when editing a playlist copy', () => {
+    const shared = structuredClone(useStore.getState().plays[0])
+    shared.id = 'shared-play'
+    shared.name = 'Jugada compartida'
+    useStore.getState().openPlaylistViewer({ id: 'list-1', name: 'Lista', plays: [shared] })
+
+    useStore.getState().editCopyOfViewerPlay()
+
+    const copy = useStore.getState().plays.find(play => play.origin?.playId === shared.id)
+    expect(copy?.origin).toMatchObject({ listId: 'list-1', playId: 'shared-play' })
+    expect(copy?.origin?.basePlay).toEqual(shared)
+  })
 })

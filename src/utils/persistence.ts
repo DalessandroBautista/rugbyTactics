@@ -1,4 +1,5 @@
 import { Play } from '../types'
+import { migratePlayTaxonomy } from './taxonomy'
 
 const STORAGE_KEY = 'rugby-tactics-plays'
 const CURRENT_PLAY_KEY = 'rugby-tactics-current-play'
@@ -75,7 +76,7 @@ export function loadPlays(): Play[] {
       data = localStorage.getItem(LEGACY_STORAGE_KEY)
       if (data !== null) localStorage.setItem(STORAGE_KEY, data)
     }
-    return data ? JSON.parse(data) : []
+    return data ? (JSON.parse(data) as Play[]).map(migratePlayTaxonomy) : []
   } catch {
     return []
   }

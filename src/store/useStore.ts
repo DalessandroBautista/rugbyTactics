@@ -18,6 +18,7 @@ import {
 } from '../types'
 import { loadPlays, savePlays, loadCurrentPlayId, saveCurrentPlayId, suspendPersistence } from '../utils/persistence'
 import { getInterpolatedPosition } from '../utils/interpolation'
+import { normalizeTags } from '../utils/taxonomy'
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 8)
@@ -752,7 +753,11 @@ export const useStore = create<PlayStore>((set, get) => {
         id: generateId(),
         name: `${viewerPlay.name} (copia)`,
         createdAt: new Date().toISOString(),
-        origin: { listId: viewer.id, playId: viewerPlay.id },
+        origin: {
+          listId: viewer.id,
+          playId: viewerPlay.id,
+          basePlay: clonePlays([viewerPlay])[0],
+        },
       }
       get().closePlaylistViewer()
       const after = get()
@@ -872,7 +877,7 @@ export const useStore = create<PlayStore>((set, get) => {
 
     updatePlayTags: (id, tags) => {
       const state = get()
-      const newPlays = state.plays.map(p => p.id === id ? { ...p, tags } : p)
+      const newPlays = state.plays.map(p => p.id === id ? { ...p, tags: normalizeTags(tags) } : p)
       set({ plays: newPlays, isDirty: true })
       savePlays(newPlays)
     },

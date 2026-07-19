@@ -1,52 +1,115 @@
-import { Router } from 'express'
-import bcrypt from 'bcryptjs'
-import { sql } from '../db.js'
-import { signToken, requireAuth } from '../middleware/auth.js'
-import type { AuthRequest } from '../middleware/auth.js'
+import 'dotenv/config'
+import { Router, type Request, type Response } from 'express'
+import { requireAuth, type AuthRequest } from '../middleware/auth.js'
+import { PostgresAuthRepository } from '../repositories/authRepository.js'
+import {
+  AuthService,
+  AuthServiceError,
+  type VerificationPurpose,
+} from '../services/authService.js'
+import { createMailService } from '../services/mailService.js'
 
-export const authRouter = Router()
+interface AuthApi {
+  requestCode(email: string, purpose: VerificationPurpose): Promise<{ challengeId: string }>
+  verifyCode(
+    challengeId: string,
+    code: string,
+    purpose: VerificationPurpose,
+  ): Promise<{ flowToken?: string; token?: string; user?: { id: number; email: string } }>
+  completeRegistration(
+    flowToken: string,
+    password: string,
+  ): Promise<{ token: string; user: { id: number; email: string } }>
+  loginWithPassword(
+    email: string,
+    password: string,
+  ): Promise<{ token: string; user: { id: number; email: string } }>
+  completePasswordReset(
+    flowToken: string,
+    password: string,
+  ): Promise<{ token: string; user: { id: number; email: string } }>
+}
 
-authRouter.post('/register', async (req, res) => {
-  const { username, password } = req.body ?? {}
-  if (!username?.trim() || !password) {
-    res.status(400).json({ error: 'Usuario y contraseña son requeridos' })
-    return
+function requiredString(value: unknown, label: string): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new AuthServiceError(`${label} es requerido`, 400)
   }
-  if (password.length < 6) {
-    res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' })
-    return
+  return value
+}
+
+function endpoint(
+  handler: (req: Request, res: Response) => Promise<void>,
+): (req: Request, res: Response) => void {
+  return (req, res) => {
+    handler(req, res).catch(error => {
+      if (error instanceof AuthServiceError) {
+        res.status(error.status).json({ error: error.message })
+        return
+      }
+      console.error('[auth] Error inesperado:', error instanceof Error ? error.message : error)
+      res.status(500).json({ error: 'Error interno de autenticación' })
+    })
   }
-  const hash = await bcrypt.hash(password, 10)
-  try {
-    const [user] = await sql<{ id: number; username: string }[]>`
-      INSERT INTO users (username, password_hash)
-      VALUES (${username.trim()}, ${hash})
-      RETURNING id, username
-    `
-    res.status(201).json({ token: signToken(user.id, user.username), user: { id: user.id, username: user.username } })
-  } catch (e: unknown) {
-    const pg = e as { code?: string }
-    if (pg.code === '23505') res.status(409).json({ error: 'Ese nombre de usuario ya existe' })
-    else res.status(500).json({ error: 'Error al registrar' })
-  }
+}
+
+export function createAuthRouter(service: AuthApi): Router {
+  const router = Router()
+
+  const requestCode = (purpose: VerificationPurpose) => endpoint(async (req, res) => {
+    const email = requiredString(req.body?.email, 'Email')
+    const result = await service.requestCode(email, purpose)
+    res.status(202).json({ ...result, message: 'Si corresponde, enviamos un código.' })
+  })
+
+  const verifyCode = (purpose: VerificationPurpose) => endpoint(async (req, res) => {
+    const challengeId = requiredString(req.body?.challengeId, 'challengeId')
+    const code = requiredString(req.body?.code, 'Código')
+    const result = await service.verifyCode(challengeId, code, purpose)
+    res.json(result)
+  })
+
+  router.post('/register/code', requestCode('register'))
+  router.post('/register/verify', verifyCode('register'))
+  router.post('/register/complete', endpoint(async (req, res) => {
+    const flowToken = requiredString(req.body?.flowToken, 'flowToken')
+    const password = requiredString(req.body?.password, 'Contraseña')
+    const result = await service.completeRegistration(flowToken, password)
+    res.status(201).json(result)
+  }))
+
+  router.post('/login/password', endpoint(async (req, res) => {
+    const email = requiredString(req.body?.email, 'Email')
+    const password = requiredString(req.body?.password, 'Contraseña')
+    res.json(await service.loginWithPassword(email, password))
+  }))
+  router.post('/login/code', requestCode('login'))
+  router.post('/login/verify', verifyCode('login'))
+
+  router.post('/reset/code', requestCode('reset'))
+  router.post('/reset/verify', verifyCode('reset'))
+  router.post('/reset/complete', endpoint(async (req, res) => {
+    const flowToken = requiredString(req.body?.flowToken, 'flowToken')
+    const password = requiredString(req.body?.password, 'Contraseña')
+    res.json(await service.completePasswordReset(flowToken, password))
+  }))
+
+  return router
+}
+
+const jwtSecret = process.env.JWT_SECRET
+if (!jwtSecret) throw new Error('JWT_SECRET requerido en .env')
+const codeSecret = process.env.AUTH_CODE_SECRET
+if (!codeSecret && process.env.NODE_ENV === 'production') {
+  throw new Error('AUTH_CODE_SECRET requerido en producción')
+}
+const authService = new AuthService({
+  repository: new PostgresAuthRepository(),
+  mailer: createMailService(),
+  codeSecret: codeSecret ?? jwtSecret,
+  jwtSecret,
 })
 
-authRouter.post('/login', async (req, res) => {
-  const { username, password } = req.body ?? {}
-  if (!username?.trim() || !password) {
-    res.status(400).json({ error: 'Usuario y contraseña son requeridos' })
-    return
-  }
-  const [user] = await sql<{ id: number; username: string; password_hash: string }[]>`
-    SELECT id, username, password_hash FROM users WHERE username = ${username.trim()}
-  `
-  if (!user || !(await bcrypt.compare(password, user.password_hash))) {
-    res.status(401).json({ error: 'Usuario o contraseña incorrectos' })
-    return
-  }
-  res.json({ token: signToken(user.id, user.username), user: { id: user.id, username: user.username } })
-})
-
+export const authRouter = createAuthRouter(authService)
 authRouter.get('/me', requireAuth, (req: AuthRequest, res) => {
-  res.json({ user: { id: req.userId, username: req.username } })
+  res.json({ user: { id: req.userId, email: req.email } })
 })

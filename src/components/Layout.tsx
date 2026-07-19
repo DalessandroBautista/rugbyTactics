@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { TopBar } from './TopBar'
 import { Timeline } from './Timeline'
 import { Sidebar } from './Sidebar'
@@ -12,10 +12,13 @@ import { AuthModal } from './AuthModal'
 import { HelpDialog } from './HelpDialog'
 import { PlaylistDialog } from './PlaylistDialog'
 import { PlaylistViewerBar } from './PlaylistViewerBar'
+import { ProposalsDialog } from './ProposalsDialog'
 import { useStore } from '../store/useStore'
+import { useAuth } from '../store/useAuth'
 
 export const Layout: React.FC = () => {
   const [showAuth, setShowAuth] = useState(false)
+  const user = useAuth(s => s.user)
   const plays = useStore(s => s.plays)
   const currentPlayId = useStore(s => s.currentPlayId)
   const isRecording = useStore(s => s.isRecording)
@@ -24,6 +27,12 @@ export const Layout: React.FC = () => {
   const isExportingVideo = useStore(s => s.isExportingVideo)
 
   const play = plays.find(p => p.id === currentPlayId)
+
+  useEffect(() => {
+    if (!user || sessionStorage.getItem('rugbytactics:pending-proposal') !== '1') return
+    sessionStorage.removeItem('rugbytactics:pending-proposal')
+    window.dispatchEvent(new CustomEvent('rugbytactics:proposals', { detail: 'send' }))
+  }, [user])
 
   // ── Modo presentación: solo campo + controles flotantes ──
   if (presentationMode) {
@@ -99,6 +108,7 @@ export const Layout: React.FC = () => {
       )}
       <HelpDialog />
       <PlaylistDialog />
+      <ProposalsDialog onRequireAuth={() => setShowAuth(true)} />
       {isExportingVideo && (
         <div style={{
           position: 'fixed',

@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useStore } from '../store/useStore'
-import { PLAY_CATEGORIES } from '../types'
+import { PLAY_CATEGORIES, TAG_PRESETS } from '../types'
+import { normalizeTags } from '../utils/taxonomy'
 import PlayMiniature from './PlayMiniature'
 import { buildShareUrl } from '../utils/share'
 import { downloadJson } from '../utils/export'
@@ -20,7 +21,7 @@ export const PlayLibrary: React.FC = () => {
 
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('All')
-  const [filterTag, setFilterTag] = useState('')
+  const [filterTags, setFilterTags] = useState<Set<string>>(new Set())
   const [showNewForm, setShowNewForm] = useState(false)
   const [newName, setNewName] = useState('')
   const [newCategory, setNewCategory] = useState('General')
@@ -40,12 +41,12 @@ export const PlayLibrary: React.FC = () => {
       p.description.toLowerCase().includes(search.toLowerCase()) ||
       (p.tags || []).some(t => t.toLowerCase().includes(search.toLowerCase()))
     const matchesCategory = filterCategory === 'All' || p.category === filterCategory
-    const matchesTag = !filterTag || (p.tags || []).includes(filterTag)
+    const matchesTag = filterTags.size === 0 || [...filterTags].every(tag => (p.tags || []).includes(tag))
     return matchesSearch && matchesCategory && matchesTag
   })
 
   // Collect all unique tags
-  const allTags = Array.from(new Set(plays.flatMap(p => p.tags || [])))
+  const allTags = Array.from(new Set([...TAG_PRESETS, ...plays.flatMap(p => p.tags || [])]))
 
   const handleCreate = () => {
     if (!newName.trim()) return
@@ -64,7 +65,7 @@ export const PlayLibrary: React.FC = () => {
   }
 
   const handleTagsSave = (id: string) => {
-    const tags = editTagsValue.split(',').map(t => t.trim()).filter(Boolean)
+    const tags = normalizeTags(editTagsValue.split(','))
     updatePlayTags(id, tags)
     setEditingTags(null)
   }
@@ -156,12 +157,12 @@ export const PlayLibrary: React.FC = () => {
           <div style={{ padding: '8px 16px', display: 'flex', gap: 4, flexWrap: 'wrap', borderBottom: '1px solid var(--border)' }}>
             <span style={{ fontSize: 10, color: '#666', marginRight: 4, alignSelf: 'center' }}>Tags:</span>
             <button
-              onClick={() => setFilterTag('')}
+              onClick={() => setFilterTags(new Set())}
               style={{
                 ...tagChipStyle,
-                background: !filterTag ? 'rgba(var(--accent-rgb),0.25)' : 'rgba(255,255,255,0.08)',
-                color: !filterTag ? 'var(--accent)' : '#888',
-                border: `1px solid ${!filterTag ? 'var(--accent)' : 'transparent'}`,
+                background: filterTags.size === 0 ? 'rgba(var(--accent-rgb),0.25)' : 'rgba(255,255,255,0.08)',
+                color: filterTags.size === 0 ? 'var(--accent)' : '#888',
+                border: `1px solid ${filterTags.size === 0 ? 'var(--accent)' : 'transparent'}`,
               }}
             >
               Todos
@@ -169,12 +170,17 @@ export const PlayLibrary: React.FC = () => {
             {allTags.map(tag => (
               <button
                 key={tag}
-                onClick={() => setFilterTag(filterTag === tag ? '' : tag)}
+                onClick={() => setFilterTags(previous => {
+                  const next = new Set(previous)
+                  if (next.has(tag)) next.delete(tag)
+                  else next.add(tag)
+                  return next
+                })}
                 style={{
                   ...tagChipStyle,
-                  background: filterTag === tag ? 'rgba(var(--accent-rgb),0.25)' : 'rgba(255,255,255,0.08)',
-                  color: filterTag === tag ? 'var(--accent)' : '#888',
-                  border: `1px solid ${filterTag === tag ? 'var(--accent)' : 'transparent'}`,
+                  background: filterTags.has(tag) ? 'rgba(var(--accent-rgb),0.25)' : 'rgba(255,255,255,0.08)',
+                  color: filterTags.has(tag) ? 'var(--accent)' : '#888',
+                  border: `1px solid ${filterTags.has(tag) ? 'var(--accent)' : 'transparent'}`,
                 }}
               >
                 {tag}
@@ -286,16 +292,23 @@ export const PlayLibrary: React.FC = () => {
                   )}
                   {/* Tags edit */}
                   {editingTags === play.id ? (
-                    <input
-                      value={editTagsValue}
-                      onChange={e => setEditTagsValue(e.target.value)}
-                      onBlur={() => handleTagsSave(play.id)}
-                      onKeyDown={e => { if (e.key === 'Enter') handleTagsSave(play.id) }}
-                      style={{ ...inputStyle, padding: '2px 6px', fontSize: '11px', marginTop: 3 }}
-                      placeholder="tag1, tag2, ..."
-                      autoFocus
-                      onClick={e => e.stopPropagation()}
-                    />
+                    <div onClick={e => e.stopPropagation()} style={{ marginTop: 5 }}>
+                      <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 4 }}>
+                        {TAG_PRESETS.map(tag => {
+                          const active = normalizeTags(editTagsValue.split(',')).includes(tag)
+                          return <button key={tag} type="button" onClick={() => {
+                            const current = normalizeTags(editTagsValue.split(','))
+                            setEditTagsValue((active ? current.filter(item => item !== tag) : [...current, tag]).join(', '))
+                          }} style={{ ...tagChipStyle, padding: '2px 5px', background: active ? 'rgba(var(--accent-rgb),.25)' : 'var(--panel)', color: active ? 'var(--accent)' : 'var(--text-dim)', border: '1px solid var(--border)' }}>{tag}</button>
+                        })}
+                      </div>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <input value={editTagsValue} onChange={e => setEditTagsValue(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleTagsSave(play.id) }}
+                          style={{ ...inputStyle, padding: '3px 6px', fontSize: 11 }} placeholder="etiqueta personalizada, ..." autoFocus />
+                        <button onClick={() => handleTagsSave(play.id)} style={actionButtonStyle}>✓</button>
+                      </div>
+                    </div>
                   ) : (
                     <div
                       style={{ fontSize: 10, color: '#555', marginTop: 2, cursor: 'text' }}

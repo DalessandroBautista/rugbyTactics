@@ -8,6 +8,7 @@ import { initDb } from './db.js'
 import { authRouter } from './routes/auth.js'
 import { playsRouter } from './routes/plays.js'
 import { playlistsRouter, publicPlaylistsRouter } from './routes/playlists.js'
+import { proposalsRouter } from './routes/proposals.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const isProd = process.env.NODE_ENV === 'production'
@@ -28,6 +29,7 @@ app.use('/api/auth', authRouter)
 app.use('/api/plays', playsRouter)
 app.use('/api/playlists', playlistsRouter)
 app.use('/api/public/playlists', publicPlaylistsRouter)
+app.use('/api/proposals', proposalsRouter)
 app.get('/api/health', (_, res) => res.json({ ok: true, ts: new Date().toISOString() }))
 
 // En producción servir el build de Vite como SPA

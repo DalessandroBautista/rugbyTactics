@@ -337,6 +337,7 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
         style={{ color: showLibrary ? 'var(--accent)' : undefined }}
         title="Ver todas mis jugadas guardadas"
       >Jugadas</GhostBtn>
+      {user && <GhostBtn onClick={() => window.dispatchEvent(new CustomEvent('rugbytactics:proposals', { detail: 'inbox' }))} title="Revisar cambios que te enviaron">Propuestas</GhostBtn>}
       <DropMenu
         label={shared ? '¡Enlace copiado!' : 'Compartir'}
         title="Compartir y exportar la jugada"
@@ -360,6 +361,16 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
         title="Más acciones"
         items={[
           ...(currentPlay?.origin ? [{
+            label: 'Proponer cambios al dueño',
+            title: 'Envía tu versión para que el dueño pueda aceptarla o rechazarla',
+            onClick: () => {
+              if (user) window.dispatchEvent(new CustomEvent('rugbytactics:proposals', { detail: 'send' }))
+              else {
+                sessionStorage.setItem('rugbytactics:pending-proposal', '1')
+                onShowAuth()
+              }
+            },
+          }, {
             label: 'Restaurar versión compartida',
             title: 'Vuelve esta copia al estado original de la lista de la que vino',
             onClick: handleRestoreOriginal,
@@ -398,7 +409,7 @@ export const TopBar: React.FC<{ onShowAuth: () => void }> = ({ onShowAuth }) => 
       {user ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           <span style={{ fontSize: 11, color: 'var(--green)', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            ● {user.username}
+            ● {user.email}
           </span>
           <button onClick={logout} style={{ ...dangerBtnBase, fontSize: 10 }} title="Cerrar sesión">Salir</button>
         </div>
