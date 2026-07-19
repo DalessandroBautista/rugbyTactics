@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { TopBar } from './TopBar'
 import { Timeline } from './Timeline'
 import { Sidebar } from './Sidebar'
@@ -15,9 +15,20 @@ import { PlaylistViewerBar } from './PlaylistViewerBar'
 import { ProposalsDialog } from './ProposalsDialog'
 import { useStore } from '../store/useStore'
 import { useAuth } from '../store/useAuth'
+import { useMobileExperience } from '../hooks/useMobileExperience'
+import { MobileLibrary } from './MobileLibrary'
+import { MobileViewer } from './MobileViewer'
+import { MobileQuickEditor } from './MobileQuickEditor'
+import { api } from '../utils/api'
+import type { PlaylistMeta } from '../types'
+import { enterImmersiveMode, exitImmersiveMode, type ImmersiveState, type MobileView } from '../utils/mobile'
 
 export const Layout: React.FC = () => {
   const [showAuth, setShowAuth] = useState(false)
+  const [mobileView, setMobileView] = useState<MobileView>('library')
+  const [mobilePlaylists, setMobilePlaylists] = useState<PlaylistMeta[]>([])
+  const immersive = useRef<ImmersiveState>({ fullscreen: false, orientationLocked: false })
+  const { isMobileExperience, isLandscape } = useMobileExperience()
   const user = useAuth(s => s.user)
   const plays = useStore(s => s.plays)
   const currentPlayId = useStore(s => s.currentPlayId)
@@ -29,10 +40,105 @@ export const Layout: React.FC = () => {
   const play = plays.find(p => p.id === currentPlayId)
 
   useEffect(() => {
+    if (isMobileExperience && presentationMode) setMobileView('viewer')
+  }, [isMobileExperience, presentationMode])
+
+  useEffect(() => {
+    if (!isMobileExperience || !user) { setMobilePlaylists([]); return }
+    api.listPlaylists().then(setMobilePlaylists).catch(() => setMobilePlaylists([]))
+  }, [isMobileExperience, user])
+
+  const requestImmersive = async () => {
+    const orientation = screen.orientation as ScreenOrientation & { lock?: (value: string) => Promise<void> }
+    const next = await enterImmersiveMode({
+      requestFullscreen: document.fullscreenElement ? undefined : () => document.documentElement.requestFullscreen(),
+      lockLandscape: orientation?.lock ? () => orientation.lock!('landscape') : undefined,
+    })
+    immersive.current = {
+      fullscreen: immersive.current.fullscreen || next.fullscreen,
+      orientationLocked: immersive.current.orientationLocked || next.orientationLocked,
+    }
+  }
+
+  const enterViewer = async (playId?: string) => {
+    if (playId) useStore.getState().setCurrentPlay(playId)
+    await requestImmersive()
+    useStore.setState({ presentationMode: true, isPlaying: false, currentTime: 0 })
+    useStore.getState().fitCanvas()
+    setMobileView('viewer')
+  }
+
+  const exitViewer = async () => {
+    if (useStore.getState().playlistViewer) useStore.getState().closePlaylistViewer()
+    else useStore.setState({ presentationMode: false, isPlaying: false })
+    const orientation = screen.orientation as ScreenOrientation & { unlock?: () => void }
+    await exitImmersiveMode(immersive.current, {
+      exitFullscreen: document.fullscreenElement ? () => document.exitFullscreen() : undefined,
+      unlockOrientation: orientation?.unlock ? () => orientation.unlock!() : undefined,
+    })
+    immersive.current = { fullscreen: false, orientationLocked: false }
+    setMobileView('library')
+  }
+
+  const openMobilePlaylist = async (id: string) => {
+    const immersiveRequest = requestImmersive()
+    try {
+      const list = await api.getPublicPlaylist(id)
+      await immersiveRequest
+      useStore.getState().openPlaylistViewer(list)
+      setMobileView('viewer')
+    } catch {
+      await immersiveRequest
+      await exitImmersiveMode(immersive.current, {
+        exitFullscreen: document.fullscreenElement ? () => document.exitFullscreen() : undefined,
+        unlockOrientation: () => (screen.orientation as ScreenOrientation & { unlock?: () => void })?.unlock?.(),
+      })
+      immersive.current = { fullscreen: false, orientationLocked: false }
+      alert('No se pudo abrir la lista. Revisá tu conexión e intentá otra vez.')
+    }
+  }
+
+  useEffect(() => {
+    if (!isMobileExperience || mobileView === 'library' || mobileView === 'desktop') return
+    history.pushState({ rugbyTacticsMobile: mobileView }, '')
+    const back = () => {
+      if (mobileView === 'viewer') void exitViewer()
+      else setMobileView('library')
+    }
+    window.addEventListener('popstate', back, { once: true })
+    return () => window.removeEventListener('popstate', back)
+  }, [isMobileExperience, mobileView])
+
+  useEffect(() => {
     if (!user || sessionStorage.getItem('rugbytactics:pending-proposal') !== '1') return
     sessionStorage.removeItem('rugbytactics:pending-proposal')
     window.dispatchEvent(new CustomEvent('rugbytactics:proposals', { detail: 'send' }))
   }, [user])
+
+  if (isMobileExperience && mobileView !== 'desktop') {
+    if (mobileView === 'viewer') return <MobileViewer isLandscape={isLandscape} onExit={() => void exitViewer()} onRequestImmersive={() => void requestImmersive()} onEdit={() => {
+      const state = useStore.getState()
+      if (state.playlistViewer) state.editCopyOfViewerPlay()
+      else useStore.setState({ presentationMode: false })
+      setMobileView('quick-edit')
+    }} />
+    if (mobileView === 'quick-edit') return <MobileQuickEditor onExit={() => setMobileView('library')} />
+    return <><MobileLibrary plays={plays} playlists={mobilePlaylists} onView={id => void enterViewer(id)} onEdit={id => {
+      useStore.getState().setCurrentPlay(id)
+      setMobileView('quick-edit')
+    }} onPropose={id => {
+      useStore.getState().setCurrentPlay(id)
+      if (user) window.dispatchEvent(new CustomEvent('rugbytactics:proposals', { detail: 'send' }))
+      else {
+        sessionStorage.setItem('rugbytactics:pending-proposal', '1')
+        setShowAuth(true)
+      }
+    }} onAccount={() => user ? useAuth.getState().logout() : setShowAuth(true)} accountLabel={user ? `Cerrar sesión de ${user.email}` : 'Iniciar sesión'} onViewPlaylist={id => void openMobilePlaylist(id)} onDesktop={() => {
+      if (confirm('El editor completo está optimizado para computadora. ¿Abrirlo igualmente?')) setMobileView('desktop')
+    }} />
+    {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+    <ProposalsDialog onRequireAuth={() => setShowAuth(true)} /></>
+  }
 
   // ── Modo presentación: solo campo + controles flotantes ──
   if (presentationMode) {

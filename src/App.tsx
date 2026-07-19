@@ -7,6 +7,17 @@ import { useServerSync } from './hooks/useServerSync'
 import { readSharedPlay, readSharedPlaylistId, clearShareHash } from './utils/share'
 import { api } from './utils/api'
 import { ensureFFmpegLoaded } from './utils/ffmpegFix'
+import { isMobileDevice } from './utils/mobile'
+
+function isMobileBrowser(): boolean {
+  const coarsePointer = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches
+  return isMobileDevice({
+    width: window.screen?.width || window.innerWidth,
+    height: window.screen?.height || window.innerHeight,
+    coarsePointer,
+    mobileBrowser: /Android|iPhone|iPad|iPod|Mobile/i.test(window.navigator.userAgent),
+  })
+}
 
 function App() {
   useKeyboard()
@@ -28,6 +39,7 @@ function App() {
     const shared = readSharedPlay()
     if (shared) {
       useStore.getState().loadFromJson(JSON.stringify(shared))
+      if (isMobileBrowser()) useStore.setState({ presentationMode: true, isPlaying: false, currentTime: 0 })
       clearShareHash()
     }
   }, [])

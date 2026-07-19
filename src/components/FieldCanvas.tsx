@@ -14,6 +14,7 @@ import { PlayerToken } from './PlayerToken'
 import { BallToken } from './BallToken'
 import { MovementTrail } from './MovementTrail'
 import { SpeechBubble } from './SpeechBubble'
+import { calculatePinchZoom } from '../utils/mobile'
 
 // Convierte coordenadas de campo a coordenadas de pantalla (para el rubber-band).
 // Replica la transformación del Group contenedor: traslación al centro del
@@ -196,6 +197,7 @@ export const FieldCanvas: React.FC = () => {
   const lastPan = useRef({ x: 0, y: 0 })
   const hasMoved = useRef(false)
   const minZoomRef = useRef(0.3)
+  const pinchRef = useRef<{ distance: number; center: { x: number; y: number } } | null>(null)
 
   // Per-player click tracking to distinguish click from drag
   const playerInteraction = useRef<{
@@ -419,6 +421,40 @@ export const FieldCanvas: React.FC = () => {
     if (e.target === e.target.getStage()) fitToScreen()
   }, [fitToScreen])
 
+  const handleStageTouchStart = useCallback((e: Konva.KonvaEventObject<TouchEvent>) => {
+    const touches = e.evt?.touches as TouchList | undefined
+    if (!touches || touches.length !== 2) return
+    e.evt.preventDefault()
+    const first = touches[0]
+    const second = touches[1]
+    pinchRef.current = {
+      distance: Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY),
+      center: { x: (first.clientX + second.clientX) / 2, y: (first.clientY + second.clientY) / 2 },
+    }
+    isPanning.current = false
+  }, [])
+
+  const handleStageTouchMove = useCallback((e: Konva.KonvaEventObject<TouchEvent>) => {
+    const touches = e.evt?.touches as TouchList | undefined
+    const previous = pinchRef.current
+    if (!touches || touches.length !== 2 || !previous) return
+    e.evt.preventDefault()
+    const first = touches[0]
+    const second = touches[1]
+    const distance = Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY)
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const center = { x: (first.clientX + second.clientX) / 2 - rect.left, y: (first.clientY + second.clientY) / 2 - rect.top }
+    const state = useStore.getState()
+    const newZoom = calculatePinchZoom({ zoom: state.view.zoom, previousDistance: previous.distance, distance, minimum: minZoomRef.current })
+    const ratio = newZoom / state.view.zoom
+    state.setPan(center.x - (center.x - state.view.panX) * ratio, center.y - (center.y - state.view.panY) * ratio)
+    state.setZoom(newZoom)
+    pinchRef.current = { distance, center }
+  }, [])
+
+  const handleStageTouchEnd = useCallback(() => { pinchRef.current = null }, [])
+
   // ── Player drag handlers ──────────────────────────────────────────────────
   const handlePlayerDragStart = useCallback((id: number, x: number, y: number) => {
     if (playerInteraction.current?.id === id) {
@@ -620,6 +656,9 @@ export const FieldCanvas: React.FC = () => {
         onMouseLeave={handleStageMouseUp}
         onClick={handleStageClick}
         onDblClick={handleStageDblClick}
+        onTouchStart={handleStageTouchStart}
+        onTouchMove={handleStageTouchMove}
+        onTouchEnd={handleStageTouchEnd}
       >
         {/* Field layer */}
         <Layer x={view.panX} y={view.panY} scaleX={view.zoom} scaleY={view.zoom}>
