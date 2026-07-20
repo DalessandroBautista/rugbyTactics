@@ -38,7 +38,67 @@ export function buildCodeEmail(
   }
 }
 
-export function createMailService(env: NodeJS.ProcessEnv = process.env): AuthMailer {
+function createResendMailer(apiKey: string, from: string, fetchFn: typeof fetch): AuthMailer {
+  return {
+    sendCode: async (email, code, purpose) => {
+      const message = buildCodeEmail(code, purpose)
+      const response = await fetchFn('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from,
+          to: [email],
+          subject: message.subject,
+          text: message.text,
+          html: message.html,
+        }),
+      })
+      if (!response.ok) {
+        throw new Error(`Resend respondió ${response.status}: ${await response.text()}`)
+      }
+    },
+  }
+}
+
+function createBrevoMailer(apiKey: string, from: string, fetchFn: typeof fetch): AuthMailer {
+  const match = from.match(/^(?:"?([^"<]*)"?\s*<)?([^<>\s]+@[^<>\s]+)>?$/)
+  const sender = { name: match?.[1]?.trim() || 'RugbyTactics', email: match?.[2] ?? from }
+  return {
+    sendCode: async (email, code, purpose) => {
+      const message = buildCodeEmail(code, purpose)
+      const response = await fetchFn('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender,
+          to: [{ email }],
+          subject: message.subject,
+          textContent: message.text,
+          htmlContent: message.html,
+        }),
+      })
+      if (!response.ok) {
+        throw new Error(`Brevo respondió ${response.status}: ${await response.text()}`)
+      }
+    },
+  }
+}
+
+export function createMailService(
+  env: NodeJS.ProcessEnv = process.env,
+  fetchFn: typeof fetch = fetch,
+): AuthMailer {
+  const httpKey = env.RESEND_API_KEY || env.BREVO_API_KEY
+  if (httpKey) {
+    if (!env.EMAIL_FROM) {
+      if (env.NODE_ENV === 'production') throw new Error('EMAIL_FROM requerido para el proveedor HTTP de mail')
+    } else {
+      return env.RESEND_API_KEY
+        ? createResendMailer(env.RESEND_API_KEY, env.EMAIL_FROM, fetchFn)
+        : createBrevoMailer(env.BREVO_API_KEY!, env.EMAIL_FROM, fetchFn)
+    }
+  }
+
   const smtpConfigured = env.SMTP_HOST && env.SMTP_PORT && env.SMTP_USER &&
     env.SMTP_APP_PASSWORD && env.EMAIL_FROM
 

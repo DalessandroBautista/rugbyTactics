@@ -13,6 +13,8 @@ services:
         sync: false        # lo ponés a mano en el dashboard de Render
       - key: AUTH_CODE_SECRET
         generateValue: true
+      - key: RESEND_API_KEY
+        sync: false        # API key de Resend (Render free bloquea SMTP saliente)
       - key: SMTP_HOST
         value: smtp.gmail.com
       - key: SMTP_PORT
